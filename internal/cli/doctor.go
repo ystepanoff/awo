@@ -73,7 +73,7 @@ func checkOnPath(bin string) checkResult {
 func checkInsideGitRepo(ctx context.Context) checkResult {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	top, err := gitx.TopLevel(cctx, ".")
+	top, err := gitx.GetRepoRoot(cctx, ".")
 	if err != nil {
 		return checkResult{name: "inside git repo", ok: false, detail: err.Error()}
 	}

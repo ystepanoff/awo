@@ -32,6 +32,82 @@ func TestEnsureInsideRejectsDotDot(t *testing.T) {
 	}
 }
 
+func TestIsSubpath(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		parent, child string
+		want          bool
+	}{
+		{root, filepath.Join(root, "a"), true},
+		{root, filepath.Join(root, "a", "b", "c"), true},
+		{root, root, false},                                // equal: strict child
+		{root, filepath.Join(root, ".."), false},           // parent
+		{root, filepath.Join(root, "..", "sibling"), false}, // sibling
+		{filepath.Join(root, "a"), filepath.Join(root, "ab"), false},
+		{filepath.Join(root, "a"), filepath.Join(root, "a", "b"), true},
+	}
+	for _, c := range cases {
+		if got := IsSubpath(c.parent, c.child); got != c.want {
+			t.Errorf("IsSubpath(%q, %q)=%v want %v", c.parent, c.child, got, c.want)
+		}
+	}
+}
+
+func TestMustBeUnder(t *testing.T) {
+	root := t.TempDir()
+	if err := MustBeUnder(root, filepath.Join(root, "x")); err != nil {
+		t.Fatalf("expected ok: %v", err)
+	}
+	if err := MustBeUnder(root, root); err == nil {
+		t.Fatal("expected error for equal paths")
+	}
+	if err := MustBeUnder(root, filepath.Join(root, "..", "evil")); err == nil {
+		t.Fatal("expected error for path outside root")
+	}
+}
+
+func TestSafeJoinHappyPath(t *testing.T) {
+	root := t.TempDir()
+	got, err := SafeJoin(root, "a", "b", "c")
+	if err != nil {
+		t.Fatalf("safe join: %v", err)
+	}
+	want := filepath.Join(root, "a", "b", "c")
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestSafeJoinRejectsEmpty(t *testing.T) {
+	root := t.TempDir()
+	if _, err := SafeJoin(root); err == nil {
+		t.Fatal("expected error for no parts")
+	}
+	if _, err := SafeJoin(root, ""); err == nil {
+		t.Fatal("expected error for empty part")
+	}
+	if _, err := SafeJoin("", "a"); err == nil {
+		t.Fatal("expected error for empty base")
+	}
+}
+
+func TestSafeJoinRejectsAbsoluteComponent(t *testing.T) {
+	root := t.TempDir()
+	if _, err := SafeJoin(root, "/etc/passwd"); err == nil {
+		t.Fatal("expected error for absolute component")
+	}
+}
+
+func TestSafeJoinRejectsParentTraversal(t *testing.T) {
+	root := t.TempDir()
+	cases := []string{"..", "../etc", "a/../b", "a/.."}
+	for _, p := range cases {
+		if _, err := SafeJoin(root, p); err == nil {
+			t.Errorf("expected error for traversal %q", p)
+		}
+	}
+}
+
 func TestIsProtectedPath(t *testing.T) {
 	patterns := []string{".github/", "Makefile", "go.mod", "*.pem"}
 	cases := []struct {
