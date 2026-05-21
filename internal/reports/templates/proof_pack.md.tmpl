@@ -1,9 +1,14 @@
 # AWO proof pack — {{.RunID}}
 
-- mode: `{{.Spec.Mode}}`
+- mode: `{{.Mode}}`
+{{- if .HasAgent}}
+- agent: `{{.PrimaryAgent.Agent}}` (role={{.PrimaryAgent.Role}})
+- branch: `{{.PrimaryAgent.BranchName}}`
+- worktree: `{{.PrimaryAgent.WorktreePath}}`
+{{- end}}
 - status: **{{.Status}}**
 - started: {{.StartedAt}}
-{{- if not .FinishedAt.IsZero}}
+{{- if .FinishedAt}}
 - finished: {{.FinishedAt}}
 {{- end}}
 {{- if .Recommendation}}
@@ -11,36 +16,63 @@
 {{- end}}
 
 ## Task
-{{.Spec.Task}}
 
-## Agents
-{{- if .AgentResults}}
-{{range .AgentResults}}
-- **{{.Agent}}** (role={{.Role}}) — exit `{{.ExitCode}}`{{if .Status}} _{{.Status}}_{{end}}
-  - worktree: `{{.WorktreePath}}`
-  - branch: `{{.BranchName}}`
-{{- if .ChangedFiles}}
-  - changed: {{len .ChangedFiles}} file(s)
+{{.Task}}
+
+## Changed files
+{{if .ChangedFiles}}
+{{- range .ChangedFiles}}
+- `{{.}}`
 {{- end}}
+{{else}}
+_no files changed_
 {{- end}}
-{{- else}}
-_no agent runs recorded_
+{{- if .ProtectedHits}}
+
+## Protected path warnings
+
+The following changed files match protected path patterns and need a human review:
+{{range .ProtectedHits}}
+- `{{.}}`
+{{- end}}
 {{- end}}
 
 ## Verification
-{{- if .VerificationResults}}
-{{range .VerificationResults}}
-- `{{.Command}}` — exit `{{.ExitCode}}` ({{if .Passed}}passed{{else}}failed{{end}}, {{.DurationMillis}}ms)
+{{if .Verifications}}
+{{- range .Verifications}}
+- `{{.Command}}` — exit `{{.ExitCode}}` ({{if .Passed}}passed{{else}}**failed**{{end}}, {{.DurationMillis}}ms)
 {{- end}}
-{{- else}}
-_no verification commands recorded_
+{{else}}
+_not verified_
+{{- end}}
+{{- if .AgentSummary}}
+
+## Agent summary
+
+{{.AgentSummary}}
+{{- end}}
+{{- if .AgentRisks}}
+
+## Agent-reported risks
+{{range .AgentRisks}}
+- {{.}}
+{{- end}}
 {{- end}}
 
+## Diff
+
+Patch: `{{.DiffPatchPath}}`
 {{- if .Warnings}}
 
 ## Warnings
-{{range .Warnings}}- {{.}}
-{{end}}{{- end}}
+{{range .Warnings}}
+- {{.}}
+{{- end}}
+{{- end}}
 
 ---
+
+AWO did not commit, push, merge, or auto-approve this change.
 AWO never auto-merges, auto-commits, or auto-pushes. Review the worktree before any human commit.
+
+Recommended next step: {{.NextHumanAction}}

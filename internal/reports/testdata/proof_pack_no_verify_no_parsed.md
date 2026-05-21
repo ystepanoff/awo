@@ -1,0 +1,35 @@
+# AWO proof pack — 20260521-120000-abc123
+
+- mode: `single`
+- agent: `claude` (role=writer)
+- branch: `awo/run/claude-writer`
+- worktree: `.awo/worktrees/run/claude-writer`
+- status: **completed**
+- started: 2026-05-21T12:00:00Z
+- finished: 2026-05-21T12:00:02Z
+- recommendation: **ready_for_human_review**
+
+## Task
+
+add /health endpoint
+
+## Changed files
+
+- `server/health.go`
+- `server/health_test.go`
+
+
+## Verification
+
+_not verified_
+
+## Diff
+
+Patch: `.awo/runs/20260521-120000-abc123/diff.patch`
+
+---
+
+AWO did not commit, push, merge, or auto-approve this change.
+AWO never auto-merges, auto-commits, or auto-pushes. Review the worktree before any human commit.
+
+Recommended next step: review the worktree diff and, if it looks right, commit and push it yourself.
