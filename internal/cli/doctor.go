@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/awo-dev/awo/internal/execx"
 	"github.com/awo-dev/awo/internal/gitx"
 	"github.com/spf13/cobra"
 )
@@ -35,10 +37,10 @@ func runDoctor(ctx context.Context, out io.Writer) error {
 	}
 
 	results := []checkResult{
-		checkOnPath(ctx, "git"),
+		checkOnPath("git"),
 		checkInsideGitRepo(ctx),
-		checkOnPath(ctx, "claude"),
-		checkOnPath(ctx, "codex"),
+		checkOnPath("claude"),
+		checkOnPath("codex"),
 		checkVersion(ctx, "git", "--version"),
 		checkVersion(ctx, "claude", "--version"),
 		checkVersion(ctx, "codex", "--version"),
@@ -61,13 +63,11 @@ func runDoctor(ctx context.Context, out io.Writer) error {
 	return nil
 }
 
-func checkOnPath(ctx context.Context, bin string) checkResult {
-	_ = ctx
-	p, err := exec.LookPath(bin)
-	if err != nil {
+func checkOnPath(bin string) checkResult {
+	if !execx.CommandExists(bin) {
 		return checkResult{name: bin + " on PATH", ok: false, detail: "not found"}
 	}
-	return checkResult{name: bin + " on PATH", ok: true, detail: p}
+	return checkResult{name: bin + " on PATH", ok: true, detail: "found"}
 }
 
 func checkInsideGitRepo(ctx context.Context) checkResult {
@@ -82,17 +82,34 @@ func checkInsideGitRepo(ctx context.Context) checkResult {
 
 func checkVersion(ctx context.Context, bin string, args ...string) checkResult {
 	name := bin + " version"
-	if _, err := exec.LookPath(bin); err != nil {
+	if !execx.CommandExists(bin) {
 		return checkResult{name: name, ok: false, detail: "binary not on PATH"}
 	}
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(cctx, bin, args...)
-	out, err := cmd.CombinedOutput()
+
+	tmp, err := os.MkdirTemp("", "awo-doctor-*")
 	if err != nil {
-		return checkResult{name: name, ok: false, detail: fmt.Sprintf("could not get version: %v", err)}
+		return checkResult{name: name, ok: false, detail: "mkdir: " + err.Error()}
 	}
-	v := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	defer os.RemoveAll(tmp)
+
+	stdoutPath := filepath.Join(tmp, "stdout")
+	res, err := execx.Run(cctx, execx.CommandSpec{
+		Command:    bin,
+		Args:       args,
+		Timeout:    5 * time.Second,
+		StdoutPath: stdoutPath,
+		StderrPath: filepath.Join(tmp, "stderr"),
+	})
+	if err != nil {
+		return checkResult{name: name, ok: false, detail: err.Error()}
+	}
+	if res.ExitCode != 0 {
+		return checkResult{name: name, ok: false, detail: fmt.Sprintf("exit %d", res.ExitCode)}
+	}
+	body, _ := os.ReadFile(stdoutPath)
+	v := strings.TrimSpace(strings.SplitN(string(body), "\n", 2)[0])
 	if v == "" {
 		v = "(empty output)"
 	}
