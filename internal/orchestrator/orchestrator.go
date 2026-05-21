@@ -1,30 +1,27 @@
 // Package orchestrator wires modes (single, writer-reviewer, competitive)
-// to agents and verification. The MVP exposes only the mode selection API
-// and stubs for the run loop; concrete execution lands in subsequent steps.
+// to agents and verification. The MVP exposes only the mode-resolution API;
+// the run loop lands with the `awo run` command.
 package orchestrator
 
 import (
 	"errors"
+	"fmt"
 
-	"github.com/awo-dev/awo/internal/config"
+	"github.com/awo-dev/awo/internal/domain"
 )
 
-// Mode is re-exported for callers that import only this package.
-type Mode = config.Mode
-
-// ResolveMode validates a user-supplied mode string against config.
-func ResolveMode(s string, fallback config.Mode) (config.Mode, error) {
+// ResolveMode validates a user-supplied mode string. If s is empty, the
+// fallback is used. An empty fallback with empty s is an error.
+func ResolveMode(s string, fallback domain.RunMode) (domain.RunMode, error) {
 	if s == "" {
 		if fallback == "" {
-			return "", errors.New("orchestrator: no mode supplied and no default configured")
+			return "", errors.New("orchestrator: no mode supplied and no fallback")
 		}
 		s = string(fallback)
 	}
-	m := config.Mode(s)
-	switch m {
-	case config.ModeSingle, config.ModeWriterReviewer, config.ModeCompetitive:
-		return m, nil
-	default:
-		return "", errors.New("orchestrator: unknown mode " + string(m))
+	m := domain.RunMode(s)
+	if err := m.Validate(); err != nil {
+		return "", fmt.Errorf("orchestrator: %w", err)
 	}
+	return m, nil
 }

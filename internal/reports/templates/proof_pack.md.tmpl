@@ -1,40 +1,45 @@
-# AWO proof pack — {{.ID}}
+# AWO proof pack — {{.RunID}}
 
-- mode: `{{.Mode}}`
+- mode: `{{.Spec.Mode}}`
 - status: **{{.Status}}**
 - started: {{.StartedAt}}
 {{- if not .FinishedAt.IsZero}}
 - finished: {{.FinishedAt}}
 {{- end}}
-{{- if .Worktree}}
-- worktree: `{{.Worktree}}`
-{{- end}}
-{{- if .Branch}}
-- branch: `{{.Branch}}`
+{{- if .Recommendation}}
+- recommendation: **{{.Recommendation}}**
 {{- end}}
 
+## Task
+{{.Spec.Task}}
+
 ## Agents
-{{- if .Agents}}
-{{range .Agents}}
-- **{{.Name}}** ({{.Kind}}{{if .Role}}, role={{.Role}}{{end}}) — exit `{{.Result.ExitCode}}`{{if .Result.TimedOut}} _(timed out)_{{end}}
+{{- if .AgentResults}}
+{{range .AgentResults}}
+- **{{.Agent}}** (role={{.Role}}) — exit `{{.ExitCode}}`{{if .Status}} _{{.Status}}_{{end}}
+  - worktree: `{{.WorktreePath}}`
+  - branch: `{{.BranchName}}`
+{{- if .ChangedFiles}}
+  - changed: {{len .ChangedFiles}} file(s)
+{{- end}}
 {{- end}}
 {{- else}}
 _no agent runs recorded_
 {{- end}}
 
 ## Verification
-{{- if .Verifies}}
-{{range .Verifies}}
-- `{{.Cmd}} {{range .Args}}{{.}} {{end}}` — exit `{{.ExitCode}}`{{if .TimedOut}} _(timed out)_{{end}}
+{{- if .VerificationResults}}
+{{range .VerificationResults}}
+- `{{.Command}}` — exit `{{.ExitCode}}` ({{if .Passed}}passed{{else}}failed{{end}}, {{.DurationMillis}}ms)
 {{- end}}
 {{- else}}
 _no verification commands recorded_
 {{- end}}
 
-{{- if .Notes}}
+{{- if .Warnings}}
 
-## Notes
-{{range .Notes}}- {{.}}
+## Warnings
+{{range .Warnings}}- {{.}}
 {{end}}{{- end}}
 
 ---

@@ -6,8 +6,10 @@ package agents
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/awo-dev/awo/internal/config"
+	"github.com/awo-dev/awo/internal/domain"
 	"github.com/awo-dev/awo/internal/execx"
 )
 
@@ -15,68 +17,75 @@ import (
 type Request struct {
 	WorktreeDir string
 	Prompt      string
-	Timeout     string
 }
 
 // Agent runs a single coding agent against a worktree.
 type Agent interface {
-	Name() string
-	Kind() config.AgentKind
+	Kind() domain.AgentKind
 	Invoke(ctx context.Context, req Request) (execx.Result, error)
 }
 
-// New constructs an Agent from a config entry. It does not invoke the
-// agent — it only resolves which binary and arguments would be used.
-func New(name string, cfg config.Agent) (Agent, error) {
-	switch cfg.Kind {
-	case config.AgentClaude:
-		return &claudeAgent{name: name, cfg: cfg}, nil
-	case config.AgentCodex:
-		return &codexAgent{name: name, cfg: cfg}, nil
+// New constructs an Agent from the relevant slice of AwoConfig.
+func New(kind domain.AgentKind, cfg config.AwoConfig) (Agent, error) {
+	switch kind {
+	case domain.AgentClaude:
+		if !cfg.Agents.Claude.Enabled {
+			return nil, fmt.Errorf("agents: claude is disabled in config")
+		}
+		return &claudeAgent{cfg: cfg.Agents.Claude}, nil
+	case domain.AgentCodex:
+		if !cfg.Agents.Codex.Enabled {
+			return nil, fmt.Errorf("agents: codex is disabled in config")
+		}
+		return &codexAgent{cfg: cfg.Agents.Codex}, nil
 	default:
-		return nil, fmt.Errorf("agents: unknown kind %q for %q", cfg.Kind, name)
+		return nil, fmt.Errorf("agents: unknown kind %q", kind)
 	}
 }
 
-type claudeAgent struct {
-	name string
-	cfg  config.Agent
-}
+type claudeAgent struct{ cfg config.ClaudeConfig }
 
-func (a *claudeAgent) Name() string            { return a.name }
-func (a *claudeAgent) Kind() config.AgentKind  { return config.AgentClaude }
+func (a *claudeAgent) Kind() domain.AgentKind { return domain.AgentClaude }
 func (a *claudeAgent) Invoke(ctx context.Context, req Request) (execx.Result, error) {
-	bin := a.cfg.Bin
+	bin := a.cfg.Command
 	if bin == "" {
 		bin = "claude"
 	}
-	args := append([]string{}, a.cfg.Args...)
-	// MVP: pass prompt via stdin; concrete flags will firm up as the
-	// orchestrator integration lands.
-	return execx.Run(ctx, bin, args, execx.RunOptions{
+	args := append([]string(nil), a.cfg.Args...)
+	cctx, cancel := withTimeout(ctx, a.cfg.TimeoutSeconds)
+	defer cancel()
+	return execx.Run(cctx, bin, args, execx.RunOptions{
 		Dir:   req.WorktreeDir,
 		Stdin: stringReader(req.Prompt),
 	})
 }
 
-type codexAgent struct {
-	name string
-	cfg  config.Agent
-}
+type codexAgent struct{ cfg config.CodexConfig }
 
-func (a *codexAgent) Name() string           { return a.name }
-func (a *codexAgent) Kind() config.AgentKind { return config.AgentCodex }
+func (a *codexAgent) Kind() domain.AgentKind { return domain.AgentCodex }
 func (a *codexAgent) Invoke(ctx context.Context, req Request) (execx.Result, error) {
-	bin := a.cfg.Bin
+	bin := a.cfg.Command
 	if bin == "" {
 		bin = "codex"
 	}
-	args := append([]string{}, a.cfg.Args...)
+	args := append([]string(nil), a.cfg.Args...)
 	if len(args) == 0 {
 		args = []string{"exec"}
 	}
-	return execx.Run(ctx, bin, args, execx.RunOptions{
+	cctx, cancel := withTimeout(ctx, a.cfg.TimeoutSeconds)
+	defer cancel()
+	return execx.Run(cctx, bin, args, execx.RunOptions{
 		Dir:   req.WorktreeDir,
 		Stdin: stringReader(req.Prompt),
 	})
+}
+
+func withTimeout(parent context.Context, secs int) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	if secs <= 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, time.Duration(secs)*time.Second)
 }

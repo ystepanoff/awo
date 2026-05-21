@@ -1,4 +1,4 @@
-// Package reports renders human-readable proof packs from run artifacts.
+// Package reports renders human-readable proof packs from RunReports.
 package reports
 
 import (
@@ -6,14 +6,14 @@ import (
 	_ "embed"
 	"text/template"
 
-	"github.com/awo-dev/awo/internal/artifacts"
+	"github.com/awo-dev/awo/internal/domain"
 )
 
 //go:embed templates/proof_pack.md.tmpl
 var proofPackTmpl string
 
 // RenderProofPack renders a markdown proof pack for the given run.
-func RenderProofPack(r artifacts.Run) (string, error) {
+func RenderProofPack(r domain.RunReport) (string, error) {
 	t, err := template.New("proof").Parse(proofPackTmpl)
 	if err != nil {
 		return "", err

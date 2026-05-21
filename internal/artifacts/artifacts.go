@@ -1,6 +1,6 @@
 // Package artifacts persists structured per-run artifacts under
-// .awo/runs/<run-id>/. The MVP defines the schema and write helpers; the
-// orchestrator will populate them as agents and verification execute.
+// <ArtifactDir>/<run-id>/. Run records are typed as domain.RunReport so the
+// schema is shared across orchestrator, reports, and the CLI.
 package artifacts
 
 import (
@@ -8,33 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
-	"github.com/awo-dev/awo/internal/execx"
+	"github.com/awo-dev/awo/internal/domain"
 )
-
-// Run is the top-level run record written to run.json.
-type Run struct {
-	ID         string            `json:"id"`
-	Mode       string            `json:"mode"`
-	StartedAt  time.Time         `json:"startedAt"`
-	FinishedAt time.Time         `json:"finishedAt,omitempty"`
-	Status     string            `json:"status"`
-	Worktree   string            `json:"worktree,omitempty"`
-	Branch     string            `json:"branch,omitempty"`
-	Agents     []AgentRecord     `json:"agents,omitempty"`
-	Verifies   []execx.Result    `json:"verifies,omitempty"`
-	Notes      []string          `json:"notes,omitempty"`
-	Meta       map[string]string `json:"meta,omitempty"`
-}
-
-// AgentRecord captures a single agent invocation within a run.
-type AgentRecord struct {
-	Name   string        `json:"name"`
-	Kind   string        `json:"kind"`
-	Role   string        `json:"role,omitempty"`
-	Result execx.Result  `json:"result"`
-}
 
 // Store writes artifacts under a fixed root (typically .awo/runs).
 type Store struct {
@@ -50,9 +26,9 @@ func (s Store) Dir(id string) (string, error) {
 	return d, nil
 }
 
-// WriteRun serializes a Run record to <id>/run.json.
-func (s Store) WriteRun(r Run) error {
-	d, err := s.Dir(r.ID)
+// WriteReport serializes a RunReport to <id>/run.json.
+func (s Store) WriteReport(r domain.RunReport) error {
+	d, err := s.Dir(r.RunID)
 	if err != nil {
 		return err
 	}

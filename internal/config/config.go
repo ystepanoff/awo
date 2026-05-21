@@ -1,3 +1,8 @@
+// Package config defines AwoConfig — AWO's user-facing configuration —
+// along with its defaults, JSON loading, and validation.
+//
+// Loading layers JSON onto Default(): any field a user omits keeps its
+// default value, so partial configs work as natural overrides.
 package config
 
 import (
@@ -8,75 +13,80 @@ import (
 	"strings"
 )
 
-// Mode is one of the supported orchestration modes.
-type Mode string
+// Filename is the conventional config filename in a project root.
+const Filename = "awo.config.json"
 
-const (
-	ModeSingle         Mode = "single"
-	ModeWriterReviewer Mode = "writer-reviewer"
-	ModeCompetitive    Mode = "competitive"
-)
-
-// AgentKind names a supported agent backend.
-type AgentKind string
-
-const (
-	AgentClaude AgentKind = "claude"
-	AgentCodex  AgentKind = "codex"
-)
-
-// Config is the AWO config file schema.
-type Config struct {
-	Version       int               `json:"version"`
-	DefaultMode   Mode              `json:"defaultMode"`
-	Agents        map[string]Agent  `json:"agents"`
-	Verification  VerificationCfg   `json:"verification"`
-	Safety        SafetyCfg         `json:"safety"`
-	Worktrees     WorktreesCfg      `json:"worktrees"`
+// AwoConfig is the AWO configuration schema written to disk as JSON.
+type AwoConfig struct {
+	WorktreeBaseDir       string       `json:"worktreeBaseDir"`
+	BranchPrefix          string       `json:"branchPrefix"`
+	ArtifactDir           string       `json:"artifactDir"`
+	DefaultVerifyCommands []string     `json:"defaultVerifyCommands"`
+	Agents                AgentsConfig `json:"agents"`
+	Safety                SafetyConfig `json:"safety"`
 }
 
-type Agent struct {
-	Kind    AgentKind `json:"kind"`
-	Bin     string    `json:"bin,omitempty"`
-	Args    []string  `json:"args,omitempty"`
-	Timeout string    `json:"timeout,omitempty"`
+// AgentsConfig groups per-agent backend configuration.
+type AgentsConfig struct {
+	Claude ClaudeConfig `json:"claude"`
+	Codex  CodexConfig  `json:"codex"`
 }
 
-type VerificationCfg struct {
-	Commands []string `json:"commands"`
-	Timeout  string   `json:"timeout,omitempty"`
+// ClaudeConfig configures the Claude Code backend.
+type ClaudeConfig struct {
+	Enabled        bool     `json:"enabled"`
+	Command        string   `json:"command"`
+	Args           []string `json:"args,omitempty"`
+	TimeoutSeconds int      `json:"timeoutSeconds"`
 }
 
-type SafetyCfg struct {
-	ProtectedPaths []string `json:"protectedPaths"`
-	RedactPatterns []string `json:"redactPatterns"`
+// CodexConfig configures the Codex backend.
+type CodexConfig struct {
+	Enabled        bool     `json:"enabled"`
+	Command        string   `json:"command"`
+	Args           []string `json:"args,omitempty"`
+	TimeoutSeconds int      `json:"timeoutSeconds"`
+	Sandbox        string   `json:"sandbox"`
+	ApprovalMode   string   `json:"approvalMode"`
 }
 
-type WorktreesCfg struct {
-	BranchPrefix string `json:"branchPrefix"`
-	Root         string `json:"root"`
+// SafetyConfig holds AWO's safety knobs.
+type SafetyConfig struct {
+	MaxChangedFiles                      int      `json:"maxChangedFiles"`
+	MaxIterations                        int      `json:"maxIterations"`
+	ProtectedPaths                       []string `json:"protectedPaths"`
+	RequireConfirmationForProtectedPaths bool     `json:"requireConfirmationForProtectedPaths"`
+	RedactLogs                           bool     `json:"redactLogs"`
 }
 
 // Default returns the built-in default configuration.
-func Default() Config {
-	return Config{
-		Version:     1,
-		DefaultMode: ModeSingle,
-		Agents: map[string]Agent{
-			"claude": {Kind: AgentClaude, Bin: "claude", Timeout: "10m"},
-			"codex":  {Kind: AgentCodex, Bin: "codex", Args: []string{"exec"}, Timeout: "10m"},
+func Default() AwoConfig {
+	return AwoConfig{
+		WorktreeBaseDir:       ".awo/worktrees",
+		BranchPrefix:          "awo",
+		ArtifactDir:           ".awo/runs",
+		DefaultVerifyCommands: []string{"go test ./..."},
+		Agents: AgentsConfig{
+			Claude: ClaudeConfig{
+				Enabled:        true,
+				Command:        "claude",
+				TimeoutSeconds: 600,
+			},
+			Codex: CodexConfig{
+				Enabled:        true,
+				Command:        "codex",
+				Args:           []string{"exec"},
+				TimeoutSeconds: 600,
+				Sandbox:        "workspace-write",
+				ApprovalMode:   "on-request",
+			},
 		},
-		Verification: VerificationCfg{
-			Commands: []string{"go test ./..."},
-			Timeout:  "15m",
-		},
-		Safety: SafetyCfg{
-			ProtectedPaths: []string{".github/", "Makefile", "go.mod", "go.sum"},
-			RedactPatterns: []string{`(?i)api[_-]?key`, `(?i)secret`, `(?i)token`, `(?i)password`},
-		},
-		Worktrees: WorktreesCfg{
-			BranchPrefix: "awo/",
-			Root:         ".awo/worktrees",
+		Safety: SafetyConfig{
+			MaxChangedFiles:                      50,
+			MaxIterations:                        1,
+			ProtectedPaths:                       []string{".github/", "Makefile", "go.mod", "go.sum"},
+			RequireConfirmationForProtectedPaths: true,
+			RedactLogs:                           true,
 		},
 	}
 }
@@ -90,75 +100,83 @@ func DefaultJSON() string {
 	return string(b) + "\n"
 }
 
+// Parse parses raw JSON layered on top of Default(). Missing fields keep
+// their default values; provided fields override them.
+func Parse(b []byte) (AwoConfig, error) {
+	if len(strings.TrimSpace(string(b))) == 0 {
+		return AwoConfig{}, errors.New("parse config: empty input")
+	}
+	cfg := Default()
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return AwoConfig{}, fmt.Errorf("parse config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return AwoConfig{}, err
+	}
+	return cfg, nil
+}
+
 // Load reads and validates a config from disk.
-func Load(path string) (Config, error) {
+func Load(path string) (AwoConfig, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return Config{}, err
+		return AwoConfig{}, err
 	}
 	return Parse(b)
 }
 
-// LoadOrDefault tries to read the config file. If it does not exist, the
-// built-in default is returned and the source is reported as "default".
-func LoadOrDefault(path string) (Config, string, error) {
+// LoadOrDefault returns a parsed config, or Default() when the file is
+// absent. The second return value is the source — either the path or the
+// literal "default".
+func LoadOrDefault(path string) (AwoConfig, string, error) {
 	cfg, err := Load(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Default(), "default", nil
 		}
-		return Config{}, "", err
+		return AwoConfig{}, "", err
 	}
 	return cfg, path, nil
 }
 
-// Parse validates raw config bytes.
-func Parse(b []byte) (Config, error) {
-	var cfg Config
-	dec := json.NewDecoder(strings.NewReader(string(b)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
-		return Config{}, fmt.Errorf("parse config: %w", err)
+// Validate enforces config invariants.
+func (c AwoConfig) Validate() error {
+	if strings.TrimSpace(c.WorktreeBaseDir) == "" {
+		return errors.New("config: worktreeBaseDir must not be empty")
 	}
-	if err := cfg.Validate(); err != nil {
-		return Config{}, err
+	if strings.TrimSpace(c.ArtifactDir) == "" {
+		return errors.New("config: artifactDir must not be empty")
 	}
-	return cfg, nil
-}
-
-// Validate enforces the config invariants.
-func (c Config) Validate() error {
-	if c.Version <= 0 {
-		return errors.New("config: version must be >= 1")
+	if c.BranchPrefix == "" {
+		return errors.New("config: branchPrefix must not be empty")
 	}
-	switch c.DefaultMode {
-	case ModeSingle, ModeWriterReviewer, ModeCompetitive:
-	case "":
-		return errors.New("config: defaultMode is required")
-	default:
-		return fmt.Errorf("config: unknown defaultMode %q", c.DefaultMode)
+	if !strings.HasPrefix(c.BranchPrefix, "awo") {
+		return fmt.Errorf("config: branchPrefix must start with %q (got %q)", "awo", c.BranchPrefix)
 	}
-	if len(c.Agents) == 0 {
-		return errors.New("config: at least one agent must be defined")
+	if strings.ContainsAny(c.BranchPrefix, " \t\n\r") {
+		return fmt.Errorf("config: branchPrefix must not contain whitespace (got %q)", c.BranchPrefix)
 	}
-	for name, a := range c.Agents {
-		if name == "" {
-			return errors.New("config: agent name must not be empty")
-		}
-		switch a.Kind {
-		case AgentClaude, AgentCodex:
-		default:
-			return fmt.Errorf("config: agent %q has unknown kind %q", name, a.Kind)
+	for i, cmd := range c.DefaultVerifyCommands {
+		if strings.TrimSpace(cmd) == "" {
+			return fmt.Errorf("config: defaultVerifyCommands[%d] must not be empty", i)
 		}
 	}
-	if c.Worktrees.BranchPrefix == "" {
-		return errors.New("config: worktrees.branchPrefix must not be empty")
+	if c.Safety.MaxChangedFiles < 0 {
+		return fmt.Errorf("config: safety.maxChangedFiles must be >= 0 (got %d)", c.Safety.MaxChangedFiles)
 	}
-	if !strings.HasPrefix(c.Worktrees.BranchPrefix, "awo/") {
-		return fmt.Errorf("config: worktrees.branchPrefix must start with %q", "awo/")
+	if c.Safety.MaxIterations < 0 {
+		return fmt.Errorf("config: safety.maxIterations must be >= 0 (got %d)", c.Safety.MaxIterations)
 	}
-	if c.Worktrees.Root == "" {
-		return errors.New("config: worktrees.root must not be empty")
+	if c.Agents.Claude.TimeoutSeconds < 0 {
+		return fmt.Errorf("config: agents.claude.timeoutSeconds must be >= 0 (got %d)", c.Agents.Claude.TimeoutSeconds)
+	}
+	if c.Agents.Codex.TimeoutSeconds < 0 {
+		return fmt.Errorf("config: agents.codex.timeoutSeconds must be >= 0 (got %d)", c.Agents.Codex.TimeoutSeconds)
+	}
+	for i, p := range c.Safety.ProtectedPaths {
+		if strings.TrimSpace(p) == "" {
+			return fmt.Errorf("config: safety.protectedPaths[%d] must not be empty", i)
+		}
 	}
 	return nil
 }
