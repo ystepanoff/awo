@@ -1,0 +1,41 @@
+# AWO proof pack — {{.ID}}
+
+- mode: `{{.Mode}}`
+- status: **{{.Status}}**
+- started: {{.StartedAt}}
+{{- if not .FinishedAt.IsZero}}
+- finished: {{.FinishedAt}}
+{{- end}}
+{{- if .Worktree}}
+- worktree: `{{.Worktree}}`
+{{- end}}
+{{- if .Branch}}
+- branch: `{{.Branch}}`
+{{- end}}
+
+## Agents
+{{- if .Agents}}
+{{range .Agents}}
+- **{{.Name}}** ({{.Kind}}{{if .Role}}, role={{.Role}}{{end}}) — exit `{{.Result.ExitCode}}`{{if .Result.TimedOut}} _(timed out)_{{end}}
+{{- end}}
+{{- else}}
+_no agent runs recorded_
+{{- end}}
+
+## Verification
+{{- if .Verifies}}
+{{range .Verifies}}
+- `{{.Cmd}} {{range .Args}}{{.}} {{end}}` — exit `{{.ExitCode}}`{{if .TimedOut}} _(timed out)_{{end}}
+{{- end}}
+{{- else}}
+_no verification commands recorded_
+{{- end}}
+
+{{- if .Notes}}
+
+## Notes
+{{range .Notes}}- {{.}}
+{{end}}{{- end}}
+
+---
+AWO never auto-merges, auto-commits, or auto-pushes. Review the worktree before any human commit.

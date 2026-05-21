@@ -1,0 +1,70 @@
+# --- Go ---
+# Compiled binaries
+/awo
+/awo.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Coverage and profiling
+*.cover
+coverage.out
+coverage.txt
+*.prof
+*.pprof
+cpu.out
+mem.out
+
+# Build / vendor caches
+/bin/
+/dist/
+/build/
+/vendor/
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# --- AWO runtime state ---
+.awo/runs/
+.awo/worktrees/
+
+# --- Claude Code ---
+# Per-project Claude state, transcripts, and local settings.
+# CLAUDE.md and AGENTS.md are intentionally NOT ignored (they are repo docs).
+.claude/
+.claude-code/
+.claude.local.json
+.claude.local/
+CLAUDE.local.md
+AGENTS.local.md
+
+# --- oh-my-claudecode (OMC) ---
+.omc/
+.omc-*/
+omc.local.json
+.omc.local.json
+
+# --- Other AI assistants (commonly co-installed; keep their state local) ---
+.codex/
+.cursor/
+.aider*
+.continue/
