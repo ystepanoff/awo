@@ -59,6 +59,51 @@ _not verified_
 {{- end}}
 {{- end}}
 
+{{- if .HasReviewer}}
+
+## Reviewer
+
+- agent: `{{.ReviewerAgent.Agent}}` (role={{.ReviewerAgent.Role}})
+- branch: `{{.ReviewerAgent.BranchName}}`
+- worktree: `{{.ReviewerAgent.WorktreePath}}`
+- status: {{.ReviewerAgent.Status}} (exit {{.ReviewerAgent.ExitCode}})
+{{- if .ReviewFindings}}
+{{- if .ReviewFindings.Recommendation}}
+- reviewer recommendation: **{{.ReviewFindings.Recommendation}}**
+{{- end}}
+{{- if .ReviewFindings.Blocking}}
+
+### Blocking findings
+{{range .ReviewFindings.Blocking}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.NonBlocking}}
+
+### Non-blocking findings
+{{range .ReviewFindings.NonBlocking}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.SuggestedTests}}
+
+### Suggested tests
+{{range .ReviewFindings.SuggestedTests}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.RiskSummary}}
+
+### Risk summary
+
+{{.ReviewFindings.RiskSummary}}
+{{- end}}
+{{- else}}
+
+_reviewer produced no parsed findings_
+{{- end}}
+{{- end}}
+
 ## Diff
 
 Patch: `{{.DiffPatchPath}}`

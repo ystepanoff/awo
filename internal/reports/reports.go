@@ -101,6 +101,9 @@ type proofPackData struct {
 	Verifications   []domain.VerificationResult
 	AgentSummary    string
 	AgentRisks      []string
+	HasReviewer     bool
+	ReviewerAgent   domain.AgentRunResult
+	ReviewFindings  *domain.ReviewFindings
 	DiffPatchPath   string
 	Warnings        []string
 	NextHumanAction string
@@ -143,6 +146,14 @@ func buildProofPackData(in Inputs) proofPackData {
 		if pr := r.AgentResults[0].ParsedResult; pr != nil {
 			d.AgentSummary = strings.TrimSpace(pr.Summary)
 			d.AgentRisks = append([]string(nil), pr.Notes...)
+		}
+	}
+	for i := 1; i < len(r.AgentResults); i++ {
+		if r.AgentResults[i].Role == domain.RoleReviewer {
+			d.HasReviewer = true
+			d.ReviewerAgent = r.AgentResults[i]
+			d.ReviewFindings = r.AgentResults[i].Review
+			break
 		}
 	}
 	d.ProtectedHits = collectProtectedHits(d.ChangedFiles, in.ProtectedPaths)

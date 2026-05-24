@@ -50,13 +50,14 @@ type SingleRunOptions struct {
 	Stdout io.Writer
 }
 
-// GitFacade is the slice of gitx that single-mode orchestration needs.
+// GitFacade is the slice of gitx that orchestration modes need.
 // Production code uses defaultGit; tests inject a fake.
 type GitFacade interface {
 	CreateWorktree(ctx context.Context, opts gitx.CreateWorktreeOptions) (*gitx.WorktreeInfo, error)
 	GetChangedFiles(ctx context.Context, worktreePath string) ([]string, error)
 	GetDiffPatch(ctx context.Context, worktreePath string) (string, error)
 	GetDiffStat(ctx context.Context, worktreePath string) (string, error)
+	ApplyPatch(ctx context.Context, worktreePath, patchPath string) error
 	RemoveWorktree(ctx context.Context, opts gitx.RemoveWorktreeOptions) error
 }
 
@@ -73,6 +74,9 @@ func (defaultGit) GetDiffPatch(ctx context.Context, p string) (string, error) {
 }
 func (defaultGit) GetDiffStat(ctx context.Context, p string) (string, error) {
 	return gitx.GetDiffStat(ctx, p)
+}
+func (defaultGit) ApplyPatch(ctx context.Context, worktreePath, patchPath string) error {
+	return gitx.ApplyPatch(ctx, worktreePath, patchPath)
 }
 func (defaultGit) RemoveWorktree(ctx context.Context, o gitx.RemoveWorktreeOptions) error {
 	return gitx.RemoveWorktree(ctx, o)
@@ -305,6 +309,15 @@ func buildAgentResult(
 		out.StdoutPath = res.StdoutPath
 		out.StderrPath = res.StderrPath
 		out.ParsedResult = res.ParsedResult
+		if res.ParsedReview != nil {
+			out.Review = &domain.ReviewFindings{
+				Blocking:       append([]string(nil), res.ParsedReview.Blocking...),
+				NonBlocking:    append([]string(nil), res.ParsedReview.NonBlocking...),
+				SuggestedTests: append([]string(nil), res.ParsedReview.SuggestedTests...),
+				RiskSummary:    res.ParsedReview.RiskSummary,
+				Recommendation: res.ParsedReview.Recommendation,
+			}
+		}
 		if len(res.Warnings) > 0 {
 			out.Warnings = append(out.Warnings, res.Warnings...)
 		}

@@ -57,6 +57,7 @@ func (f *fakeGit) GetChangedFiles(_ context.Context, _ string) ([]string, error)
 }
 func (f *fakeGit) GetDiffPatch(_ context.Context, _ string) (string, error) { return f.Diff, nil }
 func (f *fakeGit) GetDiffStat(_ context.Context, _ string) (string, error)  { return f.DiffStat, nil }
+func (f *fakeGit) ApplyPatch(_ context.Context, _, _ string) error          { return nil }
 func (f *fakeGit) RemoveWorktree(_ context.Context, _ gitx.RemoveWorktreeOptions) error {
 	f.RemoveCalls++
 	return f.RemoveErr
@@ -65,11 +66,12 @@ func (f *fakeGit) RemoveWorktree(_ context.Context, _ gitx.RemoveWorktreeOptions
 // ----- fake agent ---------------------------------------------------------
 
 type fakeAgent struct {
-	kind         domain.AgentKind
-	exitCode     int
-	parsed       *domain.ParsedAgentResult
-	returnErr    error
-	gotInputs    []agents.AgentRunInput
+	kind          domain.AgentKind
+	exitCode      int
+	parsed        *domain.ParsedAgentResult
+	parsedReview  *agents.ParsedReviewResult
+	returnErr     error
+	gotInputs     []agents.AgentRunInput
 	writeOnInvoke func(in agents.AgentRunInput) // optional file mutations
 }
 
@@ -102,6 +104,7 @@ func (f *fakeAgent) Run(_ context.Context, in agents.AgentRunInput) (*agents.Age
 		PromptPath:   prompt,
 		DryRun:       in.DryRun,
 		ParsedResult: f.parsed,
+		ParsedReview: f.parsedReview,
 	}, nil
 }
 

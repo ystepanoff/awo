@@ -116,12 +116,24 @@ type ParsedAgentResult struct {
 	Notes               []string `json:"notes,omitempty"`
 }
 
+// ReviewFindings is the orchestrator-level view of a reviewer agent's
+// AWO_REVIEW_JSON block. Like ParsedAgentResult, it is advisory and must
+// never override deterministic verification.
+type ReviewFindings struct {
+	Blocking       []string `json:"blocking,omitempty"`
+	NonBlocking    []string `json:"nonBlocking,omitempty"`
+	SuggestedTests []string `json:"suggestedTests,omitempty"`
+	RiskSummary    string   `json:"riskSummary,omitempty"`
+	Recommendation string   `json:"recommendation,omitempty"`
+}
+
 // RunSpec is the user-facing description of a run before it starts.
 type RunSpec struct {
 	Task            string      `json:"task"`
 	Mode            RunMode     `json:"mode"`
 	Primary         *AgentKind  `json:"primary,omitempty"`
 	Agent           *AgentKind  `json:"agent,omitempty"`
+	Reviewer        *AgentKind  `json:"reviewer,omitempty"`
 	Reviewers       []AgentKind `json:"reviewers,omitempty"`
 	Competitors     []AgentKind `json:"competitors,omitempty"`
 	VerifyCommands  []string    `json:"verifyCommands,omitempty"`
@@ -147,6 +159,7 @@ type AgentRunResult struct {
 	DiffPath     string             `json:"diffPath,omitempty"`
 	ChangedFiles []string           `json:"changedFiles,omitempty"`
 	ParsedResult *ParsedAgentResult `json:"parsedResult,omitempty"`
+	Review       *ReviewFindings    `json:"review,omitempty"`
 	Warnings     []string           `json:"warnings,omitempty"`
 }
 
