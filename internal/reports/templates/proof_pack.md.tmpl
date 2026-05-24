@@ -27,14 +27,20 @@
 {{else}}
 _no files changed_
 {{- end}}
-{{- if .ProtectedHits}}
+{{- if .HasProtectedHits}}
 
-## Protected path warnings
+## ⚠ Protected path warnings
 
-The following changed files match protected path patterns and need a human review:
-{{range .ProtectedHits}}
-- `{{.}}`
+These changed files match configured protected-path patterns and **must be reviewed by a human before any merge**:
+{{range .ProtectedHitDetails}}
+- `{{.Path}}`{{if .Patterns}} (matched: {{range $i, $p := .Patterns}}{{if $i}}, {{end}}`{{$p}}`{{end}}){{end}}
 {{- end}}
+{{- end}}
+{{- if .ExceedsMaxChanged}}
+
+## ⚠ Size warning
+
+This run changed **{{.ChangedFileCount}}** file(s), which exceeds the configured `safety.maxChangedFiles` limit of **{{.MaxChangedFiles}}**. Consider splitting this change before merging.
 {{- end}}
 
 ## Verification

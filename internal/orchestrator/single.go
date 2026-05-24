@@ -246,6 +246,7 @@ func RunSingle(ctx context.Context, opts SingleRunOptions) (*domain.RunReport, e
 	if maxFiles <= 0 {
 		maxFiles = opts.Config.Safety.MaxChangedFiles
 	}
+	report.Safety = AnalyzeSafety(changedFiles, opts.Config.Safety.ProtectedPaths, maxFiles)
 	report.Recommendation = recommend(report, opts.Config.Safety.ProtectedPaths, changedFiles, maxFiles)
 	report.FinishedAt = time.Now().UTC()
 	if report.Recommendation == domain.RecFailedVerification {
@@ -391,6 +392,7 @@ func printRunSummary(out io.Writer, r *domain.RunReport, layout *artifacts.Layou
 		}
 		fmt.Fprintf(out, "  verification:   %d/%d passed\n", passed, total)
 	}
+	printSafetyHighlights(out, r.Safety)
 	for _, w := range r.Warnings {
 		fmt.Fprintf(out, "  warning:        %s\n", w)
 	}

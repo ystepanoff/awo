@@ -208,6 +208,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 		report.Warnings = append(report.Warnings, "create reviewer worktree: "+err.Error())
 		// Treat as a soft failure: we still produce a proof pack with
 		// the writer's work and verification results.
+		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
 		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
@@ -263,6 +264,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 	reviewerPrompt, err := agents.BuildReviewerPrompt(reviewerInput)
 	if err != nil {
 		report.Warnings = append(report.Warnings, "build reviewer prompt: "+err.Error())
+		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
 		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
@@ -275,6 +277,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 	reviewerAgent, err := agentFactory(reviewer, opts.Config)
 	if err != nil {
 		report.Warnings = append(report.Warnings, "construct reviewer agent: "+err.Error())
+		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
 		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
@@ -321,6 +324,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 	report.AgentResults = append(report.AgentResults, reviewerAR)
 
 	// ----- recommendation ---------------------------------------------------
+	report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
 	report.Recommendation = recommendWriterReviewer(
 		report,
 		opts.Config.Safety.ProtectedPaths,
@@ -473,6 +477,7 @@ func printWriterReviewerSummary(out io.Writer, r *domain.RunReport, layout *arti
 		}
 		fmt.Fprintf(out, "  verification:   %d/%d passed\n", passed, len(r.VerificationResults))
 	}
+	printSafetyHighlights(out, r.Safety)
 	for _, w := range r.Warnings {
 		fmt.Fprintf(out, "  warning:        %s\n", w)
 	}

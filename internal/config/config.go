@@ -84,7 +84,17 @@ func Default() AwoConfig {
 		Safety: SafetyConfig{
 			MaxChangedFiles:                      50,
 			MaxIterations:                        1,
-			ProtectedPaths:                       []string{".github/", "Makefile", "go.mod", "go.sum"},
+			ProtectedPaths: []string{
+				"auth/**",
+				"payments/**",
+				"migrations/**",
+				"infra/**",
+				".github/workflows/**",
+				"**/.env*",
+				"**/*secret*",
+				"**/*credential*",
+				"**/*permission*",
+			},
 			RequireConfirmationForProtectedPaths: true,
 			RedactLogs:                           true,
 		},

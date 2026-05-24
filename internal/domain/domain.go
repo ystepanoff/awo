@@ -176,6 +176,24 @@ type VerificationResult struct {
 	Passed         bool      `json:"passed"`
 }
 
+// ProtectedPathHit records one changed file that matched configured
+// protected-path patterns, plus the patterns that flagged it.
+type ProtectedPathHit struct {
+	Path     string   `json:"path"`
+	Patterns []string `json:"patterns,omitempty"`
+}
+
+// SafetyReport summarizes the safety analysis applied to a run after
+// the agents have produced their changes. It is advisory metadata —
+// the orchestrator's recommendation field carries the actionable
+// verdict.
+type SafetyReport struct {
+	ProtectedHits      []ProtectedPathHit `json:"protectedHits,omitempty"`
+	ChangedFileCount   int                `json:"changedFileCount"`
+	MaxChangedFiles    int                `json:"maxChangedFiles,omitempty"`
+	ExceedsMaxChanged  bool               `json:"exceedsMaxChanged,omitempty"`
+}
+
 // RunReport is the canonical artifact written for every run.
 type RunReport struct {
 	RunID               string               `json:"runId"`
@@ -185,6 +203,7 @@ type RunReport struct {
 	FinishedAt          time.Time            `json:"finishedAt,omitempty"`
 	AgentResults        []AgentRunResult     `json:"agentResults,omitempty"`
 	VerificationResults []VerificationResult `json:"verificationResults,omitempty"`
+	Safety              *SafetyReport        `json:"safety,omitempty"`
 	Recommendation      Recommendation       `json:"recommendation,omitempty"`
 	ProofPackPath       string               `json:"proofPackPath,omitempty"`
 	Warnings            []string             `json:"warnings,omitempty"`

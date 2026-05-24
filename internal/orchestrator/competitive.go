@@ -164,9 +164,21 @@ func RunCompetitive(ctx context.Context, opts CompetitiveRunOptions) (*domain.Ru
 
 	// Compare and recommend.
 	verdict := CompareCandidates(snaps, scores)
-	report.Recommendation = verdict.Recommendation
+
+	// Per-run safety analysis is anchored on the winning candidate's
+	// changed files (or all candidates' union when there is no winner)
+	// so the run-level Safety field is meaningful regardless of who
+	// wins. Per-candidate protected hits remain visible in
+	// comparison.md.
+	resolvedMax := opts.MaxChangedFiles
+	if resolvedMax <= 0 {
+		resolvedMax = opts.Config.Safety.MaxChangedFiles
+	}
+	winnerFiles := winnerOrUnionChangedFiles(snaps, verdict.WinnerIndex)
+	report.Safety = AnalyzeSafety(winnerFiles, opts.Config.Safety.ProtectedPaths, resolvedMax)
+	report.Recommendation = escalateForSafety(verdict.Recommendation, report.Safety)
 	report.FinishedAt = time.Now().UTC()
-	report.Status = pickCompetitiveStatus(verdict.Recommendation)
+	report.Status = pickCompetitiveStatus(report.Recommendation)
 
 	// Render artifacts. Comparison + proof pack + summary all derive from
 	// the same final report.
@@ -407,6 +419,7 @@ func printCompetitiveSummary(
 			verifStr,
 		)
 	}
+	printSafetyHighlights(out, r.Safety)
 	for _, w := range r.Warnings {
 		fmt.Fprintf(out, "  warning:        %s\n", w)
 	}

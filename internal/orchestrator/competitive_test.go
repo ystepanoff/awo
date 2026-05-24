@@ -422,7 +422,7 @@ func TestRunCompetitiveProtectedPathPenalty(t *testing.T) {
 	// Make claude touch a protected file but otherwise be the smaller
 	// change. With both passing, the protected hit should drop claude
 	// below codex.
-	fg.state[domain.AgentClaude].ChangedFiles = []string{"go.mod", "server/migrate.go"}
+	fg.state[domain.AgentClaude].ChangedFiles = []string{"auth/login.go", "server/migrate.go"}
 	fg.state[domain.AgentCodex].ChangedFiles = []string{"server/migrate.go", "server/migrate_test.go"}
 	fg.state[domain.AgentCodex].Diff = "diff --git a/server/migrate.go b/server/migrate.go\n+ small\n"
 
@@ -437,7 +437,7 @@ func TestRunCompetitiveProtectedPathPenalty(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Protected path warnings",
-		"go.mod",
+		"auth/login.go",
 		"Recommended candidate:** `codex`",
 	} {
 		if !strings.Contains(string(cmpBody), want) {

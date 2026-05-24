@@ -19,9 +19,9 @@ add /health endpoint
 - `server/health.go`
 
 
-## Protected path warnings
+## ⚠ Protected path warnings
 
-The following changed files match protected path patterns and need a human review:
+These changed files match configured protected-path patterns and **must be reviewed by a human before any merge**:
 
 - `go.mod`
 

@@ -314,7 +314,7 @@ func TestRunSingleFailedVerification(t *testing.T) {
 
 func TestRunSingleProtectedPath(t *testing.T) {
 	opts, fg, _, _ := baseSingleOpts(t)
-	fg.ChangedFiles = []string{"go.mod", "server/health.go"}
+	fg.ChangedFiles = []string{"auth/handler.go", "server/health.go"}
 
 	report, err := RunSingle(context.Background(), opts)
 	if err != nil {

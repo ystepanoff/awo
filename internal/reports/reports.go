@@ -195,26 +195,31 @@ func buildComparisonData(in ComparisonInputs) comparisonData {
 // ----- view models --------------------------------------------------------
 
 type proofPackData struct {
-	RunID           string
-	Task            string
-	Mode            string
-	Status          string
-	Recommendation  string
-	StartedAt       string
-	FinishedAt      string
-	HasAgent        bool
-	PrimaryAgent    domain.AgentRunResult
-	ChangedFiles    []string
-	ProtectedHits   []string
-	Verifications   []domain.VerificationResult
-	AgentSummary    string
-	AgentRisks      []string
-	HasReviewer     bool
-	ReviewerAgent   domain.AgentRunResult
-	ReviewFindings  *domain.ReviewFindings
-	DiffPatchPath   string
-	Warnings        []string
-	NextHumanAction string
+	RunID              string
+	Task               string
+	Mode               string
+	Status             string
+	Recommendation     string
+	StartedAt          string
+	FinishedAt         string
+	HasAgent           bool
+	PrimaryAgent       domain.AgentRunResult
+	ChangedFiles       []string
+	ProtectedHits      []string
+	ProtectedHitDetails []domain.ProtectedPathHit
+	HasProtectedHits   bool
+	ChangedFileCount   int
+	MaxChangedFiles    int
+	ExceedsMaxChanged  bool
+	Verifications      []domain.VerificationResult
+	AgentSummary       string
+	AgentRisks         []string
+	HasReviewer        bool
+	ReviewerAgent      domain.AgentRunResult
+	ReviewFindings     *domain.ReviewFindings
+	DiffPatchPath      string
+	Warnings           []string
+	NextHumanAction    string
 }
 
 type summaryData struct {
@@ -264,7 +269,27 @@ func buildProofPackData(in Inputs) proofPackData {
 			break
 		}
 	}
-	d.ProtectedHits = collectProtectedHits(d.ChangedFiles, in.ProtectedPaths)
+	// Prefer the orchestrator-supplied safety report (it carries the
+	// patterns each path matched and the size-limit verdict). Fall
+	// back to a fresh scan over Inputs.ProtectedPaths so callers that
+	// haven't migrated yet still get protected-path output.
+	if r.Safety != nil {
+		d.ProtectedHitDetails = append([]domain.ProtectedPathHit(nil), r.Safety.ProtectedHits...)
+		d.ProtectedHits = make([]string, 0, len(r.Safety.ProtectedHits))
+		for _, h := range r.Safety.ProtectedHits {
+			d.ProtectedHits = append(d.ProtectedHits, h.Path)
+		}
+		d.ChangedFileCount = r.Safety.ChangedFileCount
+		d.MaxChangedFiles = r.Safety.MaxChangedFiles
+		d.ExceedsMaxChanged = r.Safety.ExceedsMaxChanged
+	} else {
+		d.ProtectedHits = collectProtectedHits(d.ChangedFiles, in.ProtectedPaths)
+		for _, p := range d.ProtectedHits {
+			d.ProtectedHitDetails = append(d.ProtectedHitDetails, domain.ProtectedPathHit{Path: p})
+		}
+		d.ChangedFileCount = len(d.ChangedFiles)
+	}
+	d.HasProtectedHits = len(d.ProtectedHitDetails) > 0
 	return d
 }
 

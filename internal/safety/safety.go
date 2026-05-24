@@ -112,26 +112,18 @@ func SafeJoin(base string, parts ...string) (string, error) {
 }
 
 // IsProtectedPath reports whether the given path matches any of the
-// configured protected glob/prefix patterns. Patterns ending in "/" are
-// treated as directory prefixes; others are matched with filepath.Match
-// against the path's basename and tested as a literal suffix.
+// configured protected patterns. Patterns are interpreted by the glob
+// engine in protected.go: "*" within a single path segment, "**" across
+// segments, "?" for a single character, trailing-slash directory
+// prefixes, and bare names (matched against basename or as a path
+// suffix). Path normalization is identical to MatchProtectedPaths.
 func IsProtectedPath(path string, patterns []string) bool {
-	clean := filepath.ToSlash(filepath.Clean(path))
+	clean := normalizePath(path)
+	if clean == "" {
+		return false
+	}
 	for _, p := range patterns {
-		if p == "" {
-			continue
-		}
-		if strings.HasSuffix(p, "/") {
-			if strings.HasPrefix(clean+"/", p) || strings.Contains(clean+"/", "/"+p) {
-				return true
-			}
-			continue
-		}
-		base := filepath.Base(clean)
-		if ok, _ := filepath.Match(p, base); ok {
-			return true
-		}
-		if clean == p || strings.HasSuffix(clean, "/"+p) {
+		if matchProtectedPattern(p, clean) {
 			return true
 		}
 	}
