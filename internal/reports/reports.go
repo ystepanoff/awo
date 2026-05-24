@@ -28,6 +28,9 @@ var proofPackTmpl string
 //go:embed templates/summary.md.tmpl
 var summaryTmpl string
 
+//go:embed templates/comparison.md.tmpl
+var comparisonTmpl string
+
 // Inputs carries the orchestrator-derived context needed to render a
 // run's reports. The RunReport itself is the source of truth; Inputs
 // supplies extras (protected path config, the on-disk diff path) that
@@ -82,6 +85,111 @@ func WriteRunReportFiles(in Inputs, layout *artifacts.Layout) error {
 		return fmt.Errorf("reports: write summary: %w", err)
 	}
 	return nil
+}
+
+// ----- comparison ---------------------------------------------------------
+
+// ComparisonCandidate is a renderer-agnostic view of one competitor in
+// competitive mode. The orchestrator builds these from CandidateSnapshot
+// + ScoreBreakdown values; reports does not depend on orchestrator
+// types so the import direction stays clean.
+type ComparisonCandidate struct {
+	Agent              domain.AgentKind
+	ChangedFiles       []string
+	DiffLines          int
+	TestFiles          []string
+	ProtectedHits      []string
+	Verifications      []domain.VerificationResult
+	AgentRisks         []string
+	Score              float64
+	ScoreNotes         []string
+	VerificationStatus string
+}
+
+// FileCount, TestFileCount, ProtectedHitCount are template helpers — Go
+// templates can't subscript len() across nil slices cleanly, so we
+// expose them as methods.
+func (c ComparisonCandidate) FileCount() int          { return len(c.ChangedFiles) }
+func (c ComparisonCandidate) TestFileCount() int      { return len(c.TestFiles) }
+func (c ComparisonCandidate) ProtectedHitCount() int  { return len(c.ProtectedHits) }
+
+// ComparisonInputs is the data passed to RenderComparison.
+type ComparisonInputs struct {
+	RunID          string
+	Task           string
+	Mode           string
+	Recommendation string
+	Reason         string
+	Candidates     []ComparisonCandidate
+	WinnerIndex    int // 1-based for humans; 0 means none
+	WinnerAgent    domain.AgentKind
+	Tie            bool
+}
+
+type comparisonData struct {
+	RunID            string
+	Task             string
+	Mode             string
+	Recommendation   string
+	Reason           string
+	Candidates       []ComparisonCandidate
+	HasWinner        bool
+	WinnerIndex      int
+	WinnerAgent      domain.AgentKind
+	Tie              bool
+	AnyProtectedHits bool
+}
+
+// RenderComparison renders comparison.md from the supplied inputs.
+func RenderComparison(in ComparisonInputs) (string, error) {
+	data := buildComparisonData(in)
+	return executeWithFuncs("comparison", comparisonTmpl, data, template.FuncMap{
+		"add": func(a, b int) int { return a + b },
+	})
+}
+
+// WriteComparison renders comparison.md and writes it atomically under
+// the run's artifact layout.
+func WriteComparison(in ComparisonInputs, layout *artifacts.Layout) error {
+	if layout == nil {
+		return errors.New("reports: nil layout")
+	}
+	body, err := RenderComparison(in)
+	if err != nil {
+		return fmt.Errorf("reports: render comparison: %w", err)
+	}
+	if err := layout.WriteFileAtomic(layout.ComparisonPath(), []byte(body), 0o644); err != nil {
+		return fmt.Errorf("reports: write comparison: %w", err)
+	}
+	return nil
+}
+
+func buildComparisonData(in ComparisonInputs) comparisonData {
+	d := comparisonData{
+		RunID:          in.RunID,
+		Task:           strings.TrimSpace(in.Task),
+		Mode:           in.Mode,
+		Recommendation: in.Recommendation,
+		Reason:         in.Reason,
+		Candidates:     make([]ComparisonCandidate, len(in.Candidates)),
+		Tie:            in.Tie,
+	}
+	if d.Task == "" {
+		d.Task = "_no task recorded_"
+	}
+	if in.WinnerIndex > 0 {
+		d.HasWinner = true
+		d.WinnerIndex = in.WinnerIndex
+		d.WinnerAgent = in.WinnerAgent
+	}
+	for i, c := range in.Candidates {
+		c.VerificationStatus = verificationStatus(c.Verifications)
+		d.Candidates[i] = c
+		if len(c.ProtectedHits) > 0 {
+			d.AnyProtectedHits = true
+		}
+	}
+	return d
 }
 
 // ----- view models --------------------------------------------------------
@@ -209,7 +317,15 @@ func coerceInputs(v any) (Inputs, error) {
 }
 
 func execute(name, tmpl string, data any) (string, error) {
-	t, err := template.New(name).Parse(tmpl)
+	return executeWithFuncs(name, tmpl, data, nil)
+}
+
+func executeWithFuncs(name, tmpl string, data any, funcs template.FuncMap) (string, error) {
+	t := template.New(name)
+	if funcs != nil {
+		t = t.Funcs(funcs)
+	}
+	t, err := t.Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("reports: parse %s: %w", name, err)
 	}

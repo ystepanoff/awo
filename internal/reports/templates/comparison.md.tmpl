@@ -1,0 +1,91 @@
+# AWO comparison — {{.RunID}}
+
+- mode: `{{.Mode}}`
+- task: {{.Task}}
+- recommendation: **{{.Recommendation}}**
+- reason: {{.Reason}}
+
+## Candidates
+
+| # | agent | verification | files | diff lines | tests | protected | score |
+|---|-------|--------------|-------|------------|-------|-----------|-------|
+{{- range $i, $c := .Candidates}}
+| {{add $i 1}} | `{{$c.Agent}}` | {{$c.VerificationStatus}} | {{$c.FileCount}} | {{$c.DiffLines}} | {{$c.TestFileCount}} | {{$c.ProtectedHitCount}} | {{printf "%.2f" $c.Score}} |
+{{- end}}
+
+{{- if .HasWinner}}
+
+**Recommended candidate:** `{{.WinnerAgent}}` (candidate {{.WinnerIndex}})
+{{- else if .Tie}}
+
+**Tie** — scores were within the tie threshold; a human must choose.
+{{- else}}
+
+**No clear winner** — see reason above.
+{{- end}}
+
+## Score breakdown
+{{range $i, $c := .Candidates}}
+### Candidate {{add $i 1}} — `{{$c.Agent}}` (score {{printf "%.2f" $c.Score}})
+{{range $c.ScoreNotes}}
+- {{.}}
+{{- end}}
+{{end}}
+
+## Verification
+
+| # | agent | command | exit | passed | duration |
+|---|-------|---------|------|--------|----------|
+{{- range $i, $c := .Candidates}}
+{{- if $c.Verifications}}
+{{- range $c.Verifications}}
+| {{add $i 1}} | `{{$c.Agent}}` | `{{.Command}}` | {{.ExitCode}} | {{if .Passed}}yes{{else}}**no**{{end}} | {{.DurationMillis}}ms |
+{{- end}}
+{{- else}}
+| {{add $i 1}} | `{{$c.Agent}}` | _none_ | — | — | — |
+{{- end}}
+{{- end}}
+
+## Changed files
+{{range $i, $c := .Candidates}}
+### Candidate {{add $i 1}} — `{{$c.Agent}}`
+{{- if $c.ChangedFiles}}
+{{range $c.ChangedFiles}}
+- `{{.}}`
+{{- end}}
+{{- else}}
+
+_no files changed_
+{{- end}}
+{{end}}
+{{- if .AnyProtectedHits}}
+
+## Protected path warnings
+{{range $i, $c := .Candidates}}
+{{- if $c.ProtectedHits}}
+### `{{$c.Agent}}`
+{{range $c.ProtectedHits}}
+- `{{.}}`
+{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}
+
+## Risks reported by each agent
+{{range $i, $c := .Candidates}}
+### `{{$c.Agent}}`
+{{- if $c.AgentRisks}}
+{{range $c.AgentRisks}}
+- {{.}}
+{{- end}}
+{{- else}}
+
+_no risks reported_
+{{- end}}
+{{end}}
+
+---
+
+Human review is required before any commit, push, or merge.
+
+AWO did not commit, push, merge, or auto-approve any of these candidates.

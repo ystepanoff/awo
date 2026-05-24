@@ -19,6 +19,7 @@ func newRunCmd() *cobra.Command {
 		agent           string
 		primary         string
 		reviewer        string
+		competitors     []string
 		verify          []string
 		baseBranch      string
 		keepWorktrees   bool
@@ -48,7 +49,8 @@ Examples:
   awo run "fix the null pointer bug" --mode single --agent codex --verify "go test ./..."
   awo run "add tests for calculator" --mode single --agent claude --dry-run
   awo run "fix checkout validation" --mode writer-reviewer --primary claude --reviewer codex --verify "go test ./..."
-  awo run "fix checkout validation" --mode writer-reviewer --primary codex --reviewer claude --verify "go test ./..."`,
+  awo run "fix checkout validation" --mode writer-reviewer --primary codex --reviewer claude --verify "go test ./..."
+  awo run "migrate date utility usage" --mode competitive --competitors claude,codex --verify "go test ./..."`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := args[0]
@@ -144,16 +146,43 @@ Examples:
 				}
 				return nil
 
+			case domain.ModeCompetitive:
+				kinds, err := orchestrator.ParseCompetitorList(competitors)
+				if err != nil {
+					return fmt.Errorf("run: --competitors: %w", err)
+				}
+				report, err := orchestrator.RunCompetitive(ctx, orchestrator.CompetitiveRunOptions{
+					RepoRoot:        repoRoot,
+					Task:            task,
+					Competitors:     kinds,
+					VerifyCommands:  cmds,
+					BaseBranch:      baseBranch,
+					KeepWorktrees:   keepWorktrees,
+					DryRun:          dryRun,
+					LiveOutput:      liveOutput,
+					MaxChangedFiles: maxChangedFiles,
+					Config:          cfg,
+					Stdout:          cmd.OutOrStdout(),
+				})
+				if err != nil {
+					return err
+				}
+				if report.Recommendation == domain.RecFailedVerification {
+					return errors.New("verification failed")
+				}
+				return nil
+
 			default:
 				return fmt.Errorf("run: mode %q is not implemented yet", runMode)
 			}
 		},
 	}
 
-	cmd.Flags().StringVar(&mode, "mode", "single", "orchestration mode: single | writer-reviewer")
+	cmd.Flags().StringVar(&mode, "mode", "single", "orchestration mode: single | writer-reviewer | competitive")
 	cmd.Flags().StringVar(&agent, "agent", "", "agent kind for single mode: claude or codex")
 	cmd.Flags().StringVar(&primary, "primary", "", "primary (writer) agent for writer-reviewer mode: claude or codex")
 	cmd.Flags().StringVar(&reviewer, "reviewer", "", "reviewer agent for writer-reviewer mode: claude or codex")
+	cmd.Flags().StringSliceVar(&competitors, "competitors", nil, "competing agents for competitive mode (e.g. claude,codex)")
 	cmd.Flags().StringArrayVar(&verify, "verify", nil, "verification command (repeatable; falls back to config defaults when omitted)")
 	cmd.Flags().StringVar(&baseBranch, "base-branch", "", "base branch for the worktree (defaults to HEAD)")
 	cmd.Flags().BoolVar(&keepWorktrees, "keep-worktrees", false, "do not remove worktrees after the run")

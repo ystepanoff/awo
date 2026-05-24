@@ -24,6 +24,8 @@ func TestRunCmdHelpHasExamples(t *testing.T) {
 		"--mode writer-reviewer",
 		"--primary claude",
 		"--reviewer codex",
+		"--mode competitive",
+		"--competitors claude,codex",
 		"--verify",
 		"--dry-run",
 		"--keep-worktrees",
