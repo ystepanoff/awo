@@ -333,17 +333,24 @@ func (c CodexConfig) RoleArgs(role domain.AgentRole) []string {
 // defaultCodexRoleArgs returns the built-in safe default Codex args
 // for a given role:
 //
-//   - writer/competitor: exec --sandbox workspace-write --ask-for-approval never
-//   - reviewer:          exec --sandbox read-only      --ask-for-approval never
+//   - writer/competitor: exec --sandbox workspace-write
+//   - reviewer:          exec --sandbox read-only
 //
-// "ask-for-approval never" makes the CLI fail closed instead of
-// hanging on an interactive prompt. The reviewer uses read-only so an
-// agent that ignores its prompt and tries to write still cannot.
+// `codex exec` is non-interactive by definition (no prompt for
+// approval is ever surfaced), so AWO does not pass any approval
+// flag — current versions of the CLI reject the flag entirely. The
+// sandbox flag is the trust boundary: writer is confined to the
+// worktree, reviewer cannot write at all.
+//
+// If a future Codex release re-adds an approval knob (`-c
+// approval_policy=...`, etc.), users can drop it into writerArgs /
+// reviewerArgs explicitly. AWO refuses
+// `--dangerously-bypass-approvals-and-sandbox` either way.
 func defaultCodexRoleArgs(role domain.AgentRole) []string {
 	switch role {
 	case domain.RoleReviewer:
-		return []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+		return []string{"exec", "--sandbox", "read-only"}
 	default: // writer, competitor
-		return []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+		return []string{"exec", "--sandbox", "workspace-write"}
 	}
 }

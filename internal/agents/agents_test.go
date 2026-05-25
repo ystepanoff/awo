@@ -159,7 +159,7 @@ func TestBuildCodexCommandWriterDefaults(t *testing.T) {
 	if got.Command != "codex" {
 		t.Errorf("Command=%q", got.Command)
 	}
-	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+	want := []string{"exec", "--sandbox", "workspace-write"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
 	}
@@ -174,7 +174,7 @@ func TestBuildCodexCommandWriterDefaults(t *testing.T) {
 func TestBuildCodexCommandReviewerDefaults(t *testing.T) {
 	cfg := config.Default().Agents.Codex
 	got := BuildCodexCommand(cfg, domain.RoleReviewer, "p", "/wt", "/o", "/e")
-	want := []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+	want := []string{"exec", "--sandbox", "read-only"}
 	if !equal(got.Args, want) {
 		t.Errorf("reviewer Args=%v want %v", got.Args, want)
 	}
@@ -183,7 +183,7 @@ func TestBuildCodexCommandReviewerDefaults(t *testing.T) {
 func TestBuildCodexCommandUsesEmptyConfigDefaults(t *testing.T) {
 	cfg := config.CodexConfig{}
 	got := BuildCodexCommand(cfg, domain.RoleWriter, "p", "/wt", "/o", "/e")
-	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+	want := []string{"exec", "--sandbox", "workspace-write"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want safe writer default %v", got.Args, want)
 	}
@@ -414,7 +414,7 @@ func TestCodexRunInvokesCLIWithSandboxFlags(t *testing.T) {
 		t.Fatalf("expected 1 call, got %d", len(fr.calls))
 	}
 	got := fr.calls[0]
-	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+	want := []string{"exec", "--sandbox", "workspace-write"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
 	}
@@ -429,7 +429,7 @@ func TestCodexRunReviewerUsesReadOnlySandbox(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := fr.calls[0]
-	want := []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+	want := []string{"exec", "--sandbox", "read-only"}
 	if !equal(got.Args, want) {
 		t.Errorf("reviewer Args=%v want %v (read-only sandbox)", got.Args, want)
 	}

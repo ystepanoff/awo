@@ -16,11 +16,14 @@ var redactRules = []struct {
 	{regexp.MustCompile(`(?i)(OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN)=\S+`), "${1}=" + redactionPlaceholder},
 	// HTTP bearer tokens.
 	{regexp.MustCompile(`(?i)(Authorization:\s*Bearer)\s+\S+`), "${1} " + redactionPlaceholder},
-	// Provider-prefixed tokens.
-	{regexp.MustCompile(`sk-[A-Za-z0-9_\-]{8,}`), redactionPlaceholder},
-	{regexp.MustCompile(`ghp_[A-Za-z0-9]{8,}`), redactionPlaceholder},
-	{regexp.MustCompile(`xoxb-[A-Za-z0-9-]{8,}`), redactionPlaceholder},
-	{regexp.MustCompile(`npm_[A-Za-z0-9]{8,}`), redactionPlaceholder},
+	// Provider-prefixed tokens. Anchored on a non-letter boundary so
+	// flag-like strings (e.g. `--ask-for-approval`) are not matched.
+	// Tokens are required to contain at least one digit so common
+	// English words and CLI flags after the prefix don't trip them.
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_-])sk-[A-Za-z0-9_]*[0-9][A-Za-z0-9_]{6,}`), "${1}" + redactionPlaceholder},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_-])ghp_[A-Za-z0-9]{8,}`), "${1}" + redactionPlaceholder},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_-])xoxb-[A-Za-z0-9-]{8,}`), "${1}" + redactionPlaceholder},
+	{regexp.MustCompile(`(^|[^A-Za-z0-9_-])npm_[A-Za-z0-9]{8,}`), "${1}" + redactionPlaceholder},
 }
 
 // Redact returns s with obvious secret-like substrings replaced by the

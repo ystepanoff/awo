@@ -30,8 +30,10 @@ grant. The most common fixes:
 - For Claude, ensure `--permission-mode` is one of `acceptEdits` or
   `default` with explicit `--allowedTools`. AWO refuses
   `bypassPermissions` and `--dangerously-skip-permissions`.
-- For Codex, ensure `--ask-for-approval never` and a writable sandbox
-  (`--sandbox workspace-write`). AWO refuses `danger-full-access`.
+- For Codex, ensure a writable sandbox (`--sandbox workspace-write`)
+  for the writer role. `codex exec` is non-interactive by definition,
+  so no approval flag is needed; AWO refuses `danger-full-access` and
+  `--dangerously-bypass-approvals-and-sandbox`.
 - Confirm flag names against your installed `claude --help` /
   `codex --help`; CLI flags evolve.
 

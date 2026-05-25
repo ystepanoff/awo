@@ -243,9 +243,9 @@ func TestCodexRoleArgsDefaults(t *testing.T) {
 		role domain.AgentRole
 		want []string
 	}{
-		{domain.RoleWriter, []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}},
-		{domain.RoleCompetitor, []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}},
-		{domain.RoleReviewer, []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}},
+		{domain.RoleWriter, []string{"exec", "--sandbox", "workspace-write"}},
+		{domain.RoleCompetitor, []string{"exec", "--sandbox", "workspace-write"}},
+		{domain.RoleReviewer, []string{"exec", "--sandbox", "read-only"}},
 	} {
 		got := c.RoleArgs(tc.role)
 		if !sliceEq(got, tc.want) {

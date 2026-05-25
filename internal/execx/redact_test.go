@@ -40,7 +40,7 @@ func TestRedactBearerToken(t *testing.T) {
 
 func TestRedactProviderPrefixedTokens(t *testing.T) {
 	cases := map[string]string{
-		"value=sk-aaaaaaaaaa":      "sk-",
+		"value=sk-aBcDeF1234567":   "sk-",
 		"X ghp_abcdefghij Y":       "ghp_",
 		"slack=xoxb-1111-2222-aaa": "xoxb-",
 		"env npm_aBcDeFgHiJ token": "npm_",
@@ -52,6 +52,22 @@ func TestRedactProviderPrefixedTokens(t *testing.T) {
 		}
 		if !strings.Contains(out, "[REDACTED]") {
 			t.Errorf("redact(%q) missing placeholder: %q", in, out)
+		}
+	}
+}
+
+// Real CLI flags that share a prefix-shaped substring (e.g.
+// `--ask-for-approval` contains `sk-for-approval`) must not be
+// touched, otherwise log lines from agent CLIs become unreadable.
+func TestRedactDoesNotEatCliFlags(t *testing.T) {
+	cases := []string{
+		"error: unexpected argument '--ask-for-approval' found",
+		"codex exec --sandbox read-only --ask-for-approval never",
+		"--no-skip-checks",
+	}
+	for _, in := range cases {
+		if out := Redact(in); out != in {
+			t.Errorf("Redact mutated CLI flag line: %q -> %q", in, out)
 		}
 	}
 }

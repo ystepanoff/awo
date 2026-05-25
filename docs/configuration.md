@@ -91,12 +91,12 @@ should be read with that constraint in mind.
 | ----- | ---- | ------- | ----- |
 | `enabled` | bool | `true` | Disable to skip Codex entirely. |
 | `command` | string | `codex` | Override if needed. |
-| `writerArgs` | `[]string` | `["exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"]` | Writer / competitor argv. `--ask-for-approval never` is required for non-interactive runs; `--sandbox workspace-write` lets the agent edit inside the worktree without escaping it. |
-| `reviewerArgs` | `[]string` | `["exec", "--sandbox", "read-only", "--ask-for-approval", "never"]` | Reviewer argv. `read-only` keeps the reviewer from mutating the worktree. |
+| `writerArgs` | `[]string` | `["exec", "--sandbox", "workspace-write"]` | Writer / competitor argv. `codex exec` is non-interactive by definition (no approval prompt is ever surfaced), so AWO does not pass an approval flag — current Codex versions reject `--ask-for-approval`. `--sandbox workspace-write` lets the agent edit inside the worktree without escaping it. |
+| `reviewerArgs` | `[]string` | `["exec", "--sandbox", "read-only"]` | Reviewer argv. `read-only` keeps the reviewer from mutating the worktree. |
 | `competitorArgs` | `[]string` | (falls back to `writerArgs`) | Same role-fallback rules as Claude. |
 | `args` | `[]string` | _legacy_ | Pre-per-role config. When set with no per-role list, AWO appends the legacy `sandbox` / `approvalMode` fields and uses the result for every role. |
 | `sandbox` | string | _legacy_ | Used only with the legacy `args` form; new configs should bake the sandbox flag straight into per-role args. |
-| `approvalMode` | string | _legacy_ | Used only with the legacy `args` form; new configs should bake `--ask-for-approval` straight into per-role args. |
+| `approvalMode` | string | _legacy_ | Used only with the legacy `args` form; appended as `--approval-mode <value>` for older Codex CLIs that still recognized that flag. New Codex versions removed the flag, so leave this unset on modern CLIs. |
 | `timeoutSeconds` | int | `1800` | Same semantics as Claude. |
 
 `{{prompt}}` is a recognized placeholder inside any args list. If
@@ -180,9 +180,7 @@ Every `awo run` without `--verify` runs both, in order.
 {
   "agents": {
     "codex": {
-      "writerArgs": [
-        "exec", "--sandbox", "read-only", "--ask-for-approval", "never"
-      ]
+      "writerArgs": ["exec", "--sandbox", "read-only"]
     }
   }
 }
