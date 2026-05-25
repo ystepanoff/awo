@@ -104,7 +104,7 @@ func TestBuildCodexCommandDefaults(t *testing.T) {
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
 	}
-	if got.Timeout != 600*time.Second {
+	if got.Timeout != 1800*time.Second {
 		t.Errorf("Timeout=%v", got.Timeout)
 	}
 }

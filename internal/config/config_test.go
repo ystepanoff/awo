@@ -109,9 +109,11 @@ func TestParseAppliesPartialOverride(t *testing.T) {
 	if cfg.WorktreeBaseDir != ".awo/worktrees" {
 		t.Errorf("WorktreeBaseDir mutated: %q", cfg.WorktreeBaseDir)
 	}
-	// Slice not mentioned should keep default.
-	if len(cfg.DefaultVerifyCommands) == 0 {
-		t.Error("DefaultVerifyCommands wiped by partial override")
+	// Slice not mentioned should keep default (which is empty by design,
+	// since we don't want to assume a build system). Just confirm the
+	// field is non-nil so callers can append safely.
+	if cfg.DefaultVerifyCommands == nil {
+		t.Error("DefaultVerifyCommands should be non-nil even when default is empty")
 	}
 }
 

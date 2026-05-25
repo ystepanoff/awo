@@ -65,18 +65,17 @@ func Default() AwoConfig {
 		WorktreeBaseDir:       ".awo/worktrees",
 		BranchPrefix:          "awo",
 		ArtifactDir:           ".awo/runs",
-		DefaultVerifyCommands: []string{"go test ./..."},
+		DefaultVerifyCommands: []string{},
 		Agents: AgentsConfig{
 			Claude: ClaudeConfig{
 				Enabled:        true,
 				Command:        "claude",
-				TimeoutSeconds: 600,
+				TimeoutSeconds: 1800,
 			},
 			Codex: CodexConfig{
 				Enabled:        true,
 				Command:        "codex",
-				Args:           []string{"exec"},
-				TimeoutSeconds: 600,
+				TimeoutSeconds: 1800,
 				Sandbox:        "workspace-write",
 				ApprovalMode:   "on-request",
 			},
