@@ -50,7 +50,7 @@ func execGitRunner(ctx context.Context, cwd string, args []string) (string, stri
 	if err != nil {
 		return "", "", -1, err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	stdoutPath := filepath.Join(tmp, "stdout")
 	stderrPath := filepath.Join(tmp, "stderr")
 	res, err := execx.Run(ctx, execx.CommandSpec{

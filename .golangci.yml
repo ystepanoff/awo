@@ -1,0 +1,23 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    errcheck:
+      # Failures to write to stdout/stderr from a CLI are not actionable;
+      # treating them as errors would force noisy `_, _ =` everywhere.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintln
+        - fmt.Fprintf
+        - (io.Writer).Write

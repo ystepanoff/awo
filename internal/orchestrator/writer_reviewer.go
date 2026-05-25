@@ -17,7 +17,6 @@ import (
 	"github.com/awo-dev/awo/internal/gitx"
 	"github.com/awo-dev/awo/internal/reports"
 	"github.com/awo-dev/awo/internal/runid"
-	"github.com/awo-dev/awo/internal/safety"
 )
 
 // WriterReviewerOptions captures everything needed to run a
@@ -209,7 +208,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 		// Treat as a soft failure: we still produce a proof pack with
 		// the writer's work and verification results.
 		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
-		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
+		report.Recommendation = recommendWriterReviewer(report, nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
 		writeReportArtifacts(opts, layout, report)
@@ -265,7 +264,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 	if err != nil {
 		report.Warnings = append(report.Warnings, "build reviewer prompt: "+err.Error())
 		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
-		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
+		report.Recommendation = recommendWriterReviewer(report, nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
 		writeReportArtifacts(opts, layout, report)
@@ -278,7 +277,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 	if err != nil {
 		report.Warnings = append(report.Warnings, "construct reviewer agent: "+err.Error())
 		report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
-		report.Recommendation = recommendWriterReviewer(report, opts.Config.Safety.ProtectedPaths, writerChangedFiles, resolvedMaxFiles(opts), nil)
+		report.Recommendation = recommendWriterReviewer(report, nil)
 		report.FinishedAt = time.Now().UTC()
 		report.Status = pickStatus(report.Recommendation)
 		writeReportArtifacts(opts, layout, report)
@@ -325,13 +324,7 @@ func RunWriterReviewer(ctx context.Context, opts WriterReviewerOptions) (*domain
 
 	// ----- recommendation ---------------------------------------------------
 	report.Safety = AnalyzeSafety(writerChangedFiles, opts.Config.Safety.ProtectedPaths, resolvedMaxFiles(opts))
-	report.Recommendation = recommendWriterReviewer(
-		report,
-		opts.Config.Safety.ProtectedPaths,
-		writerChangedFiles,
-		resolvedMaxFiles(opts),
-		reviewerAR.Review,
-	)
+	report.Recommendation = recommendWriterReviewer(report, reviewerAR.Review)
 	report.FinishedAt = time.Now().UTC()
 	report.Status = pickStatus(report.Recommendation)
 
@@ -393,14 +386,10 @@ func resolvedMaxFiles(opts WriterReviewerOptions) int {
 
 // recommendWriterReviewer applies the writer-reviewer verdict ladder:
 // failed verification beats reviewer recommendation beats blocking
-// findings beats protected paths beats size beats ready-for-review.
-func recommendWriterReviewer(
-	r *domain.RunReport,
-	protectedPaths []string,
-	changedFiles []string,
-	maxChangedFiles int,
-	review *domain.ReviewFindings,
-) domain.Recommendation {
+// findings; remaining safety escalations (protected paths, size) are
+// delegated to escalateForSafety so the rules stay consistent across
+// modes.
+func recommendWriterReviewer(r *domain.RunReport, review *domain.ReviewFindings) domain.Recommendation {
 	if len(r.VerificationResults) > 0 && !AllPassed(r.VerificationResults) {
 		return domain.RecFailedVerification
 	}
@@ -413,15 +402,7 @@ func recommendWriterReviewer(
 			return domain.RecNeedsRevision
 		}
 	}
-	for _, p := range changedFiles {
-		if safety.IsProtectedPath(p, protectedPaths) {
-			return domain.RecNeedsHumanAttention
-		}
-	}
-	if maxChangedFiles > 0 && len(changedFiles) > maxChangedFiles {
-		return domain.RecTooLargeForAutoReview
-	}
-	return domain.RecReadyForHumanReview
+	return escalateForSafety(domain.RecReadyForHumanReview, r.Safety)
 }
 
 func pickStatus(rec domain.Recommendation) domain.RunStatus {

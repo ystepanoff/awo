@@ -238,7 +238,7 @@ func TestRunHonorsCwd(t *testing.T) {
 	}
 	body := strings.TrimSpace(read(t, out))
 	// macOS may resolve the temp dir through /private; allow either.
-	if !(body == dir || strings.HasSuffix(body, dir)) {
+	if body != dir && !strings.HasSuffix(body, dir) {
 		t.Fatalf("pwd=%q want suffix %q", body, dir)
 	}
 }

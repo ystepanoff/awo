@@ -92,7 +92,7 @@ func checkVersion(ctx context.Context, bin string, args ...string) checkResult {
 	if err != nil {
 		return checkResult{name: name, ok: false, detail: "mkdir: " + err.Error()}
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	stdoutPath := filepath.Join(tmp, "stdout")
 	res, err := execx.Run(cctx, execx.CommandSpec{

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/awo-logo.png" alt="AWO logo" width="240">
+</p>
+
 # AWO — Agent Worktree Orchestrator
 
 AWO is a local Go CLI that coordinates Claude Code and Codex across isolated

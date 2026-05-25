@@ -24,13 +24,6 @@ func verif(passed bool, n int) []domain.VerificationResult {
 	return out
 }
 
-func mixedVerif() []domain.VerificationResult {
-	return []domain.VerificationResult{
-		{Command: "go test ./...", ExitCode: 0, Passed: true},
-		{Command: "go vet ./...", ExitCode: 1, Passed: false},
-	}
-}
-
 // ----- ScoreCandidate ------------------------------------------------------
 
 func TestScorePassingBeatsFailing(t *testing.T) {

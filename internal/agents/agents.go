@@ -307,7 +307,7 @@ func formatCommand(spec execx.CommandSpec) string {
 		b.WriteString(spec.Cwd)
 	}
 	if spec.Timeout > 0 {
-		b.WriteString(fmt.Sprintf("\n# timeout: %s", spec.Timeout))
+		fmt.Fprintf(&b, "\n# timeout: %s", spec.Timeout)
 	}
 	b.WriteString("\n")
 	return b.String()

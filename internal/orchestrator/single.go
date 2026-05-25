@@ -17,7 +17,6 @@ import (
 	"github.com/awo-dev/awo/internal/gitx"
 	"github.com/awo-dev/awo/internal/reports"
 	"github.com/awo-dev/awo/internal/runid"
-	"github.com/awo-dev/awo/internal/safety"
 )
 
 // SingleRunOptions captures everything needed to run a single-agent
@@ -247,7 +246,7 @@ func RunSingle(ctx context.Context, opts SingleRunOptions) (*domain.RunReport, e
 		maxFiles = opts.Config.Safety.MaxChangedFiles
 	}
 	report.Safety = AnalyzeSafety(changedFiles, opts.Config.Safety.ProtectedPaths, maxFiles)
-	report.Recommendation = recommend(report, opts.Config.Safety.ProtectedPaths, changedFiles, maxFiles)
+	report.Recommendation = recommendSingle(report)
 	report.FinishedAt = time.Now().UTC()
 	if report.Recommendation == domain.RecFailedVerification {
 		report.Status = domain.StatusFailed
@@ -340,26 +339,16 @@ func buildAgentResult(
 	return out
 }
 
-// recommend implements the verdict ladder: failed verification, then
-// protected paths, then size, then ready for review.
-func recommend(
-	r *domain.RunReport,
-	protectedPaths []string,
-	changedFiles []string,
-	maxChangedFiles int,
-) domain.Recommendation {
+// recommendSingle applies the single-mode verdict ladder. Failed
+// verification always wins; otherwise the safety analysis (protected
+// paths, patch size) decides whether to escalate from "ready for human
+// review". The ladder lives in escalateForSafety so single,
+// writer-reviewer, and competitive modes stay consistent.
+func recommendSingle(r *domain.RunReport) domain.Recommendation {
 	if len(r.VerificationResults) > 0 && !AllPassed(r.VerificationResults) {
 		return domain.RecFailedVerification
 	}
-	for _, p := range changedFiles {
-		if safety.IsProtectedPath(p, protectedPaths) {
-			return domain.RecNeedsHumanAttention
-		}
-	}
-	if maxChangedFiles > 0 && len(changedFiles) > maxChangedFiles {
-		return domain.RecTooLargeForAutoReview
-	}
-	return domain.RecReadyForHumanReview
+	return escalateForSafety(domain.RecReadyForHumanReview, r.Safety)
 }
 
 func persistReport(layout *artifacts.Layout, r *domain.RunReport) error {

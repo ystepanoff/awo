@@ -104,10 +104,7 @@ Examples:
 				if err != nil {
 					return err
 				}
-				if report.Recommendation == domain.RecFailedVerification {
-					return errors.New("verification failed")
-				}
-				return nil
+				return runVerificationStatus(report)
 
 			case domain.ModeWriterReviewer:
 				if primary == "" {
@@ -141,10 +138,7 @@ Examples:
 				if err != nil {
 					return err
 				}
-				if report.Recommendation == domain.RecFailedVerification {
-					return errors.New("verification failed")
-				}
-				return nil
+				return runVerificationStatus(report)
 
 			case domain.ModeCompetitive:
 				kinds, err := orchestrator.ParseCompetitorList(competitors)
@@ -167,10 +161,7 @@ Examples:
 				if err != nil {
 					return err
 				}
-				if report.Recommendation == domain.RecFailedVerification {
-					return errors.New("verification failed")
-				}
-				return nil
+				return runVerificationStatus(report)
 
 			default:
 				return fmt.Errorf("run: mode %q is not implemented yet", runMode)
@@ -190,4 +181,16 @@ Examples:
 	cmd.Flags().BoolVar(&liveOutput, "live-output", false, "mirror agent stdout/stderr to the terminal")
 	cmd.Flags().IntVar(&maxChangedFiles, "max-changed-files", 0, "override safety.maxChangedFiles for this run (0 = use config)")
 	return cmd
+}
+
+// runVerificationStatus turns the run's recommendation into the exit
+// status of `awo run`. A failed verification is the only thing that
+// makes the command itself fail; every other recommendation (including
+// needs_human_attention and too_large_for_auto_review) leaves the
+// command successful so users still get a 0 exit and can iterate.
+func runVerificationStatus(report *domain.RunReport) error {
+	if report != nil && report.Recommendation == domain.RecFailedVerification {
+		return fmt.Errorf("verification failed (run %s — see %s)", report.RunID, report.ProofPackPath)
+	}
+	return nil
 }
