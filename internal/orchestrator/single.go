@@ -22,16 +22,16 @@ import (
 // SingleRunOptions captures everything needed to run a single-agent
 // orchestration end-to-end.
 type SingleRunOptions struct {
-	RepoRoot         string
-	Task             string
-	Agent            domain.AgentKind
-	VerifyCommands   []string
-	BaseBranch       string
-	KeepWorktrees    bool
-	DryRun           bool
-	LiveOutput       bool
-	MaxChangedFiles  int // 0 → cfg.Safety.MaxChangedFiles
-	Config           config.AwoConfig
+	RepoRoot        string
+	Task            string
+	Agent           domain.AgentKind
+	VerifyCommands  []string
+	BaseBranch      string
+	KeepWorktrees   bool
+	DryRun          bool
+	LiveOutput      bool
+	MaxChangedFiles int // 0 → cfg.Safety.MaxChangedFiles
+	Config          config.AwoConfig
 
 	// AgentFactory is optional. When nil, agents.New is used. Tests
 	// inject a fake factory to avoid spawning real CLIs.
@@ -309,6 +309,8 @@ func buildAgentResult(
 		out.StdoutPath = res.StdoutPath
 		out.StderrPath = res.StderrPath
 		out.ParsedResult = res.ParsedResult
+		out.FailureKind = res.FailureKind
+		out.FailureReason = res.FailureReason
 		if res.ParsedReview != nil {
 			out.Review = &domain.ReviewFindings{
 				Blocking:       append([]string(nil), res.ParsedReview.Blocking...),
@@ -359,10 +361,11 @@ func recommendSingle(r *domain.RunReport) domain.Recommendation {
 // emptyRunVerdict produces a recommendation for a run that produced
 // no candidate diff. There are two flavors:
 //
-//   - The agent itself reported failure / timeout. The verification
-//     verdict (run against an unchanged worktree) is meaningless;
-//     surface this as needs_human_attention so a human looks at the
-//     stderr/log to see what happened.
+//   - The agent itself reported failure / timeout / a permission
+//     prompt it could not get past. The verification verdict (run
+//     against an unchanged worktree) is meaningless; surface this as
+//     needs_human_attention so a human looks at the stderr/log to see
+//     what happened.
 //   - The agent succeeded but produced nothing. No human action is
 //     possible — there is no diff to merge — so report no_recommendation
 //     instead of misleadingly claiming "ready for human review".
@@ -383,6 +386,12 @@ func emptyRunVerdict(r *domain.RunReport) (domain.Recommendation, bool) {
 		}
 		sawWriter = true
 		if ar.Status == "failed" || ar.Status == "timed-out" {
+			writerFailed = true
+		}
+		// A permission-required failure also counts as the writer
+		// failing — the worktree is unchanged because the CLI refused
+		// to proceed, not because the work was easy.
+		if ar.FailureKind != "" && ar.FailureKind != "parse_warning" {
 			writerFailed = true
 		}
 	}

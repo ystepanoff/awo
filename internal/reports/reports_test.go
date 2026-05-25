@@ -84,6 +84,21 @@ func protectedHitsInputs() Inputs {
 	return in
 }
 
+func permissionFailureInputs() Inputs {
+	in := happyInputs()
+	in.Report.AgentResults[0].ChangedFiles = nil
+	in.Report.AgentResults[0].Status = "failed"
+	in.Report.AgentResults[0].FailureKind = "permission_required"
+	in.Report.AgentResults[0].FailureReason = `agent appears to have hit an interactive permission/approval prompt (stderr: "Error: permission required to edit /etc/passwd")`
+	in.Report.AgentResults[0].StdoutPath = ".awo/runs/20260521-120000-abc123/agents/claude-writer/stdout.log"
+	in.Report.AgentResults[0].StderrPath = ".awo/runs/20260521-120000-abc123/agents/claude-writer/stderr.log"
+	in.Report.AgentResults[0].ParsedResult = nil
+	in.Report.VerificationResults = nil
+	in.Report.Recommendation = domain.RecNeedsHumanAttention
+	in.Report.Status = domain.StatusFailed
+	return in
+}
+
 // ----- snapshot helper ----------------------------------------------------
 
 func goldenCheck(t *testing.T, name, got string) {
@@ -155,6 +170,36 @@ func TestRenderProofPackProtectedHits(t *testing.T) {
 	}
 	if !strings.Contains(out, "`go.mod`") {
 		t.Errorf("protected file not listed:\n%s", out)
+	}
+}
+
+func TestRenderProofPackPermissionFailure(t *testing.T) {
+	out, err := RenderProofPack(permissionFailureInputs())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	goldenCheck(t, "proof_pack_permission_failure.md", out)
+	for _, want := range []string{
+		"Agent failure (permission_required)",
+		"non-interactive",
+		"awo.config.json",
+		"bypassPermissions",
+		"danger-full-access",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected %q in permission-failure proof pack", want)
+		}
+	}
+}
+
+func TestRenderSummaryPermissionFailure(t *testing.T) {
+	out, err := RenderSummary(permissionFailureInputs())
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	goldenCheck(t, "summary_permission_failure.md", out)
+	if !strings.Contains(out, "agent failure: `permission_required`") {
+		t.Errorf("summary missing failure cue:\n%s", out)
 	}
 }
 

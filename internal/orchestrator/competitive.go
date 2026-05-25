@@ -112,13 +112,13 @@ func RunCompetitive(ctx context.Context, opts CompetitiveRunOptions) (*domain.Ru
 		go func(i int, kind domain.AgentKind) {
 			defer wg.Done()
 			candidates[i] = runOneCompetitor(ctx, runOneCompetitorInput{
-				index:         i,
-				kind:          kind,
-				rid:           rid,
-				opts:          opts,
-				layout:        layout,
-				gitFacade:     gitFacade,
-				agentFactory:  agentFactory,
+				index:        i,
+				kind:         kind,
+				rid:          rid,
+				opts:         opts,
+				layout:       layout,
+				gitFacade:    gitFacade,
+				agentFactory: agentFactory,
 			})
 		}(i, kind)
 	}

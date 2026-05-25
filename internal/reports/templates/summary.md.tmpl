@@ -5,6 +5,9 @@
 - recommendation: **{{.Recommendation}}**
 - verification: {{.VerificationStatus}}
 - changed files: {{.ChangedFileCount}}
+{{- if .FailureKind}}
+- agent failure: `{{.FailureKind}}`{{if .FailureReason}} — {{.FailureReason}}{{end}}
+{{- end}}
 
 ## Next human action
 

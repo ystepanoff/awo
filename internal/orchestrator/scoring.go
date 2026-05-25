@@ -15,14 +15,14 @@ import (
 // (git status, verification exit codes, parsed agent JSON) so the
 // scoring step is a pure function of inputs the user can audit.
 type CandidateSnapshot struct {
-	Agent          domain.AgentKind
-	ChangedFiles   []string
-	DiffLines      int // total +/- lines, derived from the patch
-	TestFiles      []string
-	ProtectedHits  []string
-	Verifications  []domain.VerificationResult
-	AgentSummary   string
-	AgentRisks     []string
+	Agent           domain.AgentKind
+	ChangedFiles    []string
+	DiffLines       int // total +/- lines, derived from the patch
+	TestFiles       []string
+	ProtectedHits   []string
+	Verifications   []domain.VerificationResult
+	AgentSummary    string
+	AgentRisks      []string
 	AgentConfidence string
 }
 
@@ -30,15 +30,15 @@ type CandidateSnapshot struct {
 // final score so comparison.md can show *why* one candidate beat the
 // other. Each field is a signed contribution; Total is their sum.
 type ScoreBreakdown struct {
-	Verification   float64 // +pass / -fail
-	NoChange       float64 // -- when zero changes
-	FileCount      float64 // - for many files
-	DiffSize       float64 // - for large diffs
-	Tests          float64 // + when tests added/updated
-	Protected      float64 // - per protected hit
-	Confidence     float64 // small +/- from parsed JSON
-	Total          float64
-	Notes          []string // human-readable explanations
+	Verification float64 // +pass / -fail
+	NoChange     float64 // -- when zero changes
+	FileCount    float64 // - for many files
+	DiffSize     float64 // - for large diffs
+	Tests        float64 // + when tests added/updated
+	Protected    float64 // - per protected hit
+	Confidence   float64 // small +/- from parsed JSON
+	Total        float64
+	Notes        []string // human-readable explanations
 }
 
 // Add appends a note describing one of the contributions.
@@ -50,7 +50,7 @@ func (b *ScoreBreakdown) note(format string, args ...any) {
 // candidates: who wins, whether it's a tie, and the human-readable
 // recommendation that should land in the run report.
 type CompareVerdict struct {
-	WinnerIndex    int    // -1 when tie or no clear winner
+	WinnerIndex    int // -1 when tie or no clear winner
 	Tie            bool
 	Recommendation domain.Recommendation
 	Reason         string

@@ -15,7 +15,7 @@ func TestMatchProtectedPatternStarMatchesSingleSegment(t *testing.T) {
 		{"*.pem", "server.pem", true},
 		{"*.pem", "keys/server.pem", true}, // bare basename glob walks suffixes
 		{"keys/*.pem", "keys/server.pem", true},
-		{"keys/*.pem", "keys/sub/server.pem", false},  // * does not cross /
+		{"keys/*.pem", "keys/sub/server.pem", false}, // * does not cross /
 		{"keys/*.pem", "other/server.pem", false},
 		{"*.go", "main.go", true},
 		{"*.go", "main_test.go", true},
@@ -218,9 +218,9 @@ func TestCountChangedFiles(t *testing.T) {
 		{[]string{}, 0},
 		{[]string{"a.go"}, 1},
 		{[]string{"a.go", "b.go"}, 2},
-		{[]string{"a.go", "a.go"}, 1},                // dedup
-		{[]string{"a.go", "./a.go"}, 1},              // normalize
-		{[]string{"a.go", "  ", ""}, 1},              // whitespace dropped
+		{[]string{"a.go", "a.go"}, 1},   // dedup
+		{[]string{"a.go", "./a.go"}, 1}, // normalize
+		{[]string{"a.go", "  ", ""}, 1}, // whitespace dropped
 		{[]string{"src/a.go", "src/a.go"}, 1},
 	}
 	for i, c := range cases {

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/awo-dev/awo/internal/domain"
 )
 
 // Filename is the conventional config filename in a project root.
@@ -33,21 +35,41 @@ type AgentsConfig struct {
 }
 
 // ClaudeConfig configures the Claude Code backend.
+//
+// AWO supports per-role argument lists so the writer can have edit
+// permissions while the reviewer is locked into a read-only mode. The
+// legacy `Args` field is kept for backward compatibility: when a role's
+// specific args list is empty, RoleArgs falls back to `Args`, then to
+// the built-in safe defaults for that role.
 type ClaudeConfig struct {
-	Enabled        bool     `json:"enabled"`
-	Command        string   `json:"command"`
+	Enabled bool   `json:"enabled"`
+	Command string `json:"command"`
+	// Args is the legacy single args list. New configs should prefer
+	// the per-role lists below.
 	Args           []string `json:"args,omitempty"`
+	WriterArgs     []string `json:"writerArgs,omitempty"`
+	ReviewerArgs   []string `json:"reviewerArgs,omitempty"`
+	CompetitorArgs []string `json:"competitorArgs,omitempty"`
 	TimeoutSeconds int      `json:"timeoutSeconds"`
 }
 
 // CodexConfig configures the Codex backend.
+//
+// Per-role args follow the same pattern as ClaudeConfig. The legacy
+// Sandbox / ApprovalMode fields are still honored for backward
+// compatibility but are only consulted when the resolver falls back to
+// the legacy Args path; new safe defaults bake their sandbox and
+// approval flags directly into the per-role args.
 type CodexConfig struct {
 	Enabled        bool     `json:"enabled"`
 	Command        string   `json:"command"`
 	Args           []string `json:"args,omitempty"`
+	WriterArgs     []string `json:"writerArgs,omitempty"`
+	ReviewerArgs   []string `json:"reviewerArgs,omitempty"`
+	CompetitorArgs []string `json:"competitorArgs,omitempty"`
 	TimeoutSeconds int      `json:"timeoutSeconds"`
-	Sandbox        string   `json:"sandbox"`
-	ApprovalMode   string   `json:"approvalMode"`
+	Sandbox        string   `json:"sandbox,omitempty"`
+	ApprovalMode   string   `json:"approvalMode,omitempty"`
 }
 
 // SafetyConfig holds AWO's safety knobs.
@@ -76,13 +98,11 @@ func Default() AwoConfig {
 				Enabled:        true,
 				Command:        "codex",
 				TimeoutSeconds: 1800,
-				Sandbox:        "workspace-write",
-				ApprovalMode:   "on-request",
 			},
 		},
 		Safety: SafetyConfig{
-			MaxChangedFiles:                      50,
-			MaxIterations:                        1,
+			MaxChangedFiles: 50,
+			MaxIterations:   1,
 			ProtectedPaths: []string{
 				"auth/**",
 				"payments/**",
@@ -187,5 +207,143 @@ func (c AwoConfig) Validate() error {
 			return fmt.Errorf("config: safety.protectedPaths[%d] must not be empty", i)
 		}
 	}
+	if err := validateAgentArgs("agents.claude", c.Agents.Claude.Args, c.Agents.Claude.WriterArgs, c.Agents.Claude.ReviewerArgs, c.Agents.Claude.CompetitorArgs); err != nil {
+		return err
+	}
+	if err := validateAgentArgs("agents.codex", c.Agents.Codex.Args, c.Agents.Codex.WriterArgs, c.Agents.Codex.ReviewerArgs, c.Agents.Codex.CompetitorArgs); err != nil {
+		return err
+	}
 	return nil
+}
+
+// dangerousArgTokens lists case-insensitive substrings that AWO refuses
+// to accept anywhere in an agent args list, regardless of which role the
+// args target. The list is intentionally narrow — these are the explicit
+// "bypass everything" knobs both CLIs ship today.
+var dangerousArgTokens = []string{
+	"bypasspermissions",
+	"--dangerously-skip-permissions",
+	"danger-full-access",
+	"dangerously-bypass",
+}
+
+func validateAgentArgs(prefix string, lists ...[]string) error {
+	for _, list := range lists {
+		for i, a := range list {
+			low := strings.ToLower(a)
+			for _, bad := range dangerousArgTokens {
+				if strings.Contains(low, bad) {
+					return fmt.Errorf("config: %s contains dangerous arg %q at position %d; AWO refuses to use unrestricted permission bypasses", prefix, a, i)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ----- per-role args resolution ------------------------------------------
+
+// RoleArgs returns the resolved args list for the given role.
+//
+// Resolution order:
+//  1. The role-specific args list when non-empty.
+//  2. The legacy Args list when non-empty (back-compat for configs
+//     written before the per-role split).
+//  3. The safe built-in default for that role.
+//
+// The returned slice is freshly allocated so callers may mutate it
+// without affecting the config.
+func (c ClaudeConfig) RoleArgs(role domain.AgentRole) []string {
+	switch role {
+	case domain.RoleWriter:
+		if len(c.WriterArgs) > 0 {
+			return append([]string(nil), c.WriterArgs...)
+		}
+	case domain.RoleReviewer:
+		if len(c.ReviewerArgs) > 0 {
+			return append([]string(nil), c.ReviewerArgs...)
+		}
+	case domain.RoleCompetitor:
+		if len(c.CompetitorArgs) > 0 {
+			return append([]string(nil), c.CompetitorArgs...)
+		}
+	}
+	if len(c.Args) > 0 {
+		return append([]string(nil), c.Args...)
+	}
+	return defaultClaudeRoleArgs(role)
+}
+
+// defaultClaudeRoleArgs returns the built-in safe default Claude args
+// for a given role. The defaults are tuned to produce useful work
+// non-interactively while keeping AWO's worktree as the only writable
+// surface:
+//
+//   - writer/competitor: -p --permission-mode acceptEdits
+//     non-interactive print mode + auto-accept edits inside cwd.
+//   - reviewer:          -p --permission-mode plan
+//     non-interactive print mode + plan-only (no Edit/Write/Bash).
+//
+// None of these flags grant access outside cwd or bypass bash; that
+// boundary is enforced by AWO's worktree isolation.
+func defaultClaudeRoleArgs(role domain.AgentRole) []string {
+	switch role {
+	case domain.RoleReviewer:
+		return []string{"-p", "--permission-mode", "plan"}
+	default: // writer, competitor
+		return []string{"-p", "--permission-mode", "acceptEdits"}
+	}
+}
+
+// RoleArgs returns the resolved args list for the given role.
+//
+// The resolution mirrors ClaudeConfig.RoleArgs. When falling back to
+// the legacy Args path, the legacy Sandbox / ApprovalMode fields are
+// appended as --sandbox / --approval-mode flags so old configs keep
+// working. The new per-role defaults bake their sandbox and approval
+// flags directly into the args.
+func (c CodexConfig) RoleArgs(role domain.AgentRole) []string {
+	switch role {
+	case domain.RoleWriter:
+		if len(c.WriterArgs) > 0 {
+			return append([]string(nil), c.WriterArgs...)
+		}
+	case domain.RoleReviewer:
+		if len(c.ReviewerArgs) > 0 {
+			return append([]string(nil), c.ReviewerArgs...)
+		}
+	case domain.RoleCompetitor:
+		if len(c.CompetitorArgs) > 0 {
+			return append([]string(nil), c.CompetitorArgs...)
+		}
+	}
+	if len(c.Args) > 0 {
+		out := append([]string(nil), c.Args...)
+		if s := strings.TrimSpace(c.Sandbox); s != "" {
+			out = append(out, "--sandbox", s)
+		}
+		if m := strings.TrimSpace(c.ApprovalMode); m != "" {
+			out = append(out, "--approval-mode", m)
+		}
+		return out
+	}
+	return defaultCodexRoleArgs(role)
+}
+
+// defaultCodexRoleArgs returns the built-in safe default Codex args
+// for a given role:
+//
+//   - writer/competitor: exec --sandbox workspace-write --ask-for-approval never
+//   - reviewer:          exec --sandbox read-only      --ask-for-approval never
+//
+// "ask-for-approval never" makes the CLI fail closed instead of
+// hanging on an interactive prompt. The reviewer uses read-only so an
+// agent that ignores its prompt and tries to write still cannot.
+func defaultCodexRoleArgs(role domain.AgentRole) []string {
+	switch role {
+	case domain.RoleReviewer:
+		return []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+	default: // writer, competitor
+		return []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+	}
 }

@@ -43,7 +43,7 @@ func TestAnalyzeSafetyProtectedHitsCarryPatterns(t *testing.T) {
 	}
 	// Sorted by path
 	want := map[string]string{
-		"auth/login.go":           "auth/**",
+		"auth/login.go":          "auth/**",
 		"config/.env.production": "**/.env*",
 	}
 	for _, h := range r.ProtectedHits {

@@ -9,6 +9,10 @@
 - finished: 2026-05-21T12:00:02Z
 - recommendation: **ready_for_human_review**
 
+> AWO ran agents in **non-interactive** mode. CLIs were not allowed to
+> prompt for approval; they either had pre-granted permission for the
+> operation or the run failed closed.
+
 ## Task
 
 add /health endpoint

@@ -141,6 +141,9 @@ func TestInitInstructionFilesContainAwoRules(t *testing.T) {
 			"Do not merge",
 			"protected paths",
 			"verification",
+			"non-interactive",
+			"bypassPermissions",
+			"danger-full-access",
 		} {
 			if !strings.Contains(s, want) {
 				t.Errorf("%s missing %q:\n%s", name, want, s)
@@ -148,7 +151,7 @@ func TestInitInstructionFilesContainAwoRules(t *testing.T) {
 		}
 		// Concise: the instruction body should fit on a screen — keep
 		// the cap loose but prevent unbounded growth.
-		if len(s) > 1500 {
+		if len(s) > 2000 {
 			t.Errorf("%s is too long (%d bytes); keep it concise", name, len(s))
 		}
 	}

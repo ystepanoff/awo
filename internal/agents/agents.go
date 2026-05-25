@@ -24,6 +24,27 @@ import (
 	"github.com/awo-dev/awo/internal/execx"
 )
 
+// defaultAgentTimeout is applied to any agent invocation whose
+// configured TimeoutSeconds is <= 0. Agents that hang forever in
+// non-interactive mode are AWO's most painful failure mode, so we
+// always pin a ceiling — see the spec.
+const defaultAgentTimeout = 1800 * time.Second
+
+// PromptPlaceholder is the substring AWO replaces with the rendered
+// prompt when it appears in a configured args list. When no
+// placeholder appears, the prompt is appended as the final argument
+// instead.
+const PromptPlaceholder = "{{prompt}}"
+
+// FailureKind classifies why a run did not produce a clean result.
+// "" means no failure was recorded.
+const (
+	FailureProcessFailed      = "process_failed"
+	FailureTimeout            = "timeout"
+	FailurePermissionRequired = "permission_required"
+	FailureParseWarning       = "parse_warning"
+)
+
 // AgentRunInput is the resolved input passed to Agent.Run.
 type AgentRunInput struct {
 	RunID        string
@@ -47,20 +68,28 @@ type AgentRunInput struct {
 // self-reports. Adapters surface advisory data (parsed result block,
 // review block, warnings) and the raw exec result.
 type AgentRunResult struct {
-	Agent          domain.AgentKind
-	Role           domain.AgentRole
-	Command        execx.CommandSpec
-	StartedAt      time.Time
-	FinishedAt     time.Time
-	ExitCode       int
-	TimedOut       bool
-	StdoutPath     string
-	StderrPath     string
-	PromptPath     string
-	DryRun         bool
-	ParsedResult   *domain.ParsedAgentResult
-	ParsedReview   *ParsedReviewResult
-	Warnings       []string
+	Agent        domain.AgentKind
+	Role         domain.AgentRole
+	Command      execx.CommandSpec
+	StartedAt    time.Time
+	FinishedAt   time.Time
+	ExitCode     int
+	TimedOut     bool
+	StdoutPath   string
+	StderrPath   string
+	PromptPath   string
+	DryRun       bool
+	ParsedResult *domain.ParsedAgentResult
+	ParsedReview *ParsedReviewResult
+	Warnings     []string
+	// FailureKind classifies the failure: "" (none), "process_failed",
+	// "timeout", "permission_required", "parse_warning".
+	FailureKind string
+	// FailureReason is a short human-readable explanation associated
+	// with FailureKind.
+	FailureReason string
+	// PermissionFailure is set when FailureKind == "permission_required".
+	PermissionFailure *PermissionFailure
 }
 
 // Agent is the contract every adapter implements.
@@ -88,7 +117,8 @@ func New(kind domain.AgentKind, _ config.AwoConfig) (Agent, error) {
 // ----- ClaudeCLIAdapter ---------------------------------------------------
 
 // ClaudeCLIAdapter invokes the `claude` CLI with the rendered prompt
-// piped on stdin.
+// piped on stdin (or substituted into the args list if the user wrote
+// {{prompt}} explicitly).
 type ClaudeCLIAdapter struct {
 	run runner
 }
@@ -105,50 +135,53 @@ func (a *ClaudeCLIAdapter) Run(ctx context.Context, in AgentRunInput) (*AgentRun
 	if err := validateInput(in); err != nil {
 		return nil, err
 	}
-	spec := BuildClaudeCommand(in.Config.Agents.Claude, in.Prompt)
-	return runAdapter(ctx, in, spec, a.kindRoleSlug(in.Role), a.run, a.Kind(), in.Role)
+	stdoutPath := filepath.Join(in.ArtifactDir, "stdout.log")
+	stderrPath := filepath.Join(in.ArtifactDir, "stderr.log")
+	spec := BuildClaudeCommand(in.Config.Agents.Claude, in.Role, in.Prompt, in.WorktreePath, stdoutPath, stderrPath)
+	return runAdapter(ctx, in, spec, a.run, a.Kind(), in.Role)
 }
 
-func (a *ClaudeCLIAdapter) kindRoleSlug(r domain.AgentRole) string { return "claude-" + string(r) }
+// BuildClaudeCommand turns ClaudeConfig + role + prompt into a CommandSpec.
+//
+// The args list comes from cfg.RoleArgs(role) — see config.ClaudeConfig
+// docs for the resolution rules. Inside that list:
+//
+//   - any element exactly equal to "{{prompt}}" is replaced by the
+//     rendered prompt;
+//   - if no element contains "{{prompt}}", the prompt is appended as
+//     the final argument when args end with "-p" (CLI expected to
+//     accept it as a positional argument), otherwise the prompt is
+//     piped on stdin.
+//
+// The worktreePath / stdoutPath / stderrPath parameters are accepted
+// for parity with BuildCodexCommand even though Claude does not need
+// them in its argv today; future role-specific args may want to
+// embed them via {{worktree}} etc., and routing them through the
+// signature now keeps adapter call sites stable.
+func BuildClaudeCommand(
+	cfg config.ClaudeConfig,
+	role domain.AgentRole,
+	prompt string,
+	worktreePath string,
+	stdoutPath string,
+	stderrPath string,
+) execx.CommandSpec {
+	_ = worktreePath
+	_ = stdoutPath
+	_ = stderrPath
 
-// BuildClaudeCommand turns ClaudeConfig + prompt into a CommandSpec.
-//
-// Defaults (when cfg.Args is empty):
-//
-//	-p                                non-interactive print mode; reads
-//	                                  the prompt from stdin.
-//	--permission-mode acceptEdits     auto-accept file writes inside the
-//	                                  cwd. AWO's cwd is always an
-//	                                  isolated worktree under
-//	                                  .awo/worktrees, so this is the
-//	                                  intended trust boundary — without
-//	                                  it the CLI prompts for permission
-//	                                  on every Edit and the writer can't
-//	                                  make progress non-interactively.
-//	                                  This is the safest of the
-//	                                  auto-modes; it does NOT bypass
-//	                                  permissions for bash or for paths
-//	                                  outside cwd.
-//
-// User-supplied cfg.Args REPLACE the defaults. The prompt itself is
-// always written to stdin (never as a CLI argument) so prompt content
-// never reaches a shell and isn't limited by argv length.
-func BuildClaudeCommand(cfg config.ClaudeConfig, prompt string) execx.CommandSpec {
 	bin := strings.TrimSpace(cfg.Command)
 	if bin == "" {
 		bin = "claude"
 	}
-	var args []string
-	if len(cfg.Args) > 0 {
-		args = append(args, cfg.Args...)
-	} else {
-		args = append(args, "-p", "--permission-mode", "acceptEdits")
-	}
+	args := cfg.RoleArgs(role)
+	args, stdin := embedPrompt(args, prompt)
+
 	return execx.CommandSpec{
 		Command: bin,
 		Args:    args,
-		Stdin:   []byte(prompt),
-		Timeout: secondsToDuration(cfg.TimeoutSeconds),
+		Stdin:   stdin,
+		Timeout: resolveTimeout(cfg.TimeoutSeconds),
 	}
 }
 
@@ -172,45 +205,80 @@ func (a *CodexCLIAdapter) Run(ctx context.Context, in AgentRunInput) (*AgentRunR
 	if err := validateInput(in); err != nil {
 		return nil, err
 	}
-	spec := BuildCodexCommand(in.Config.Agents.Codex, in.Prompt)
-	return runAdapter(ctx, in, spec, a.kindRoleSlug(in.Role), a.run, a.Kind(), in.Role)
+	stdoutPath := filepath.Join(in.ArtifactDir, "stdout.log")
+	stderrPath := filepath.Join(in.ArtifactDir, "stderr.log")
+	spec := BuildCodexCommand(in.Config.Agents.Codex, in.Role, in.Prompt, in.WorktreePath, stdoutPath, stderrPath)
+	return runAdapter(ctx, in, spec, a.run, a.Kind(), in.Role)
 }
 
-func (a *CodexCLIAdapter) kindRoleSlug(r domain.AgentRole) string { return "codex-" + string(r) }
+// BuildCodexCommand turns CodexConfig + role + prompt into a CommandSpec.
+//
+// The args list comes from cfg.RoleArgs(role) — see
+// config.CodexConfig docs. {{prompt}} substitution and prompt-on-stdin
+// fallback are handled exactly as for Claude.
+//
+// AWO never adds dangerous bypasses on the user's behalf. If the user
+// wants a permissive sandbox they must say so explicitly in their
+// per-role args.
+func BuildCodexCommand(
+	cfg config.CodexConfig,
+	role domain.AgentRole,
+	prompt string,
+	worktreePath string,
+	stdoutPath string,
+	stderrPath string,
+) execx.CommandSpec {
+	_ = worktreePath
+	_ = stdoutPath
+	_ = stderrPath
 
-// BuildCodexCommand turns CodexConfig + prompt into a CommandSpec.
-//
-// The default base command is "codex exec" — non-interactive execution.
-// User-supplied Args replace the default base when present, so a config
-// like {"args": ["--profile", "ci", "exec"]} passes through verbatim.
-//
-// Sandbox and ApprovalMode are appended as --sandbox / --approval-mode
-// flags. AWO never sets dangerous bypasses on the user's behalf; if the
-// user wants a permissive mode they must set it explicitly in config.
-func BuildCodexCommand(cfg config.CodexConfig, prompt string) execx.CommandSpec {
 	bin := strings.TrimSpace(cfg.Command)
 	if bin == "" {
 		bin = "codex"
 	}
+	args := cfg.RoleArgs(role)
+	args, stdin := embedPrompt(args, prompt)
 
-	var args []string
-	if len(cfg.Args) > 0 {
-		args = append(args, cfg.Args...)
-	} else {
-		args = append(args, "exec")
-	}
-	if s := strings.TrimSpace(cfg.Sandbox); s != "" {
-		args = append(args, "--sandbox", s)
-	}
-	if m := strings.TrimSpace(cfg.ApprovalMode); m != "" {
-		args = append(args, "--approval-mode", m)
-	}
 	return execx.CommandSpec{
 		Command: bin,
 		Args:    args,
-		Stdin:   []byte(prompt),
-		Timeout: secondsToDuration(cfg.TimeoutSeconds),
+		Stdin:   stdin,
+		Timeout: resolveTimeout(cfg.TimeoutSeconds),
 	}
+}
+
+// embedPrompt resolves the {{prompt}} placeholder in args. If any
+// element contains the placeholder, every occurrence is replaced
+// with prompt and stdin is left empty. Otherwise the original args
+// are returned unchanged and the prompt is delivered on stdin so the
+// CLI's non-interactive mode (-p, --print, exec, ...) reads it.
+func embedPrompt(args []string, prompt string) ([]string, []byte) {
+	hasPlaceholder := false
+	for _, a := range args {
+		if strings.Contains(a, PromptPlaceholder) {
+			hasPlaceholder = true
+			break
+		}
+	}
+	if !hasPlaceholder {
+		return args, []byte(prompt)
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = strings.ReplaceAll(a, PromptPlaceholder, prompt)
+	}
+	return out, nil
+}
+
+// resolveTimeout normalizes user-supplied timeout seconds. Zero,
+// negative, or unset values fall back to the AWO default rather than
+// "no timeout"; the latter would let a hung CLI block forever in
+// non-interactive mode.
+func resolveTimeout(seconds int) time.Duration {
+	if seconds <= 0 {
+		return defaultAgentTimeout
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 // ----- shared adapter machinery -------------------------------------------
@@ -241,7 +309,6 @@ func runAdapter(
 	ctx context.Context,
 	in AgentRunInput,
 	spec execx.CommandSpec,
-	_ string,
 	run runner,
 	kind domain.AgentKind,
 	role domain.AgentRole,
@@ -300,22 +367,76 @@ func runAdapter(
 	res.TimedOut = cr.TimedOut
 
 	stdoutBytes, _ := os.ReadFile(stdoutPath)
+	stderrBytes, _ := os.ReadFile(stderrPath)
 	stdout := string(stdoutBytes)
+	stderr := string(stderrBytes)
+
 	switch role {
 	case domain.RoleReviewer:
 		if review, perr := ParseReviewResult(stdout); review != nil {
 			res.ParsedReview = review
 		} else if perr != nil {
 			res.Warnings = append(res.Warnings, perr.Error())
+			if res.FailureKind == "" {
+				res.FailureKind = FailureParseWarning
+				res.FailureReason = perr.Error()
+			}
 		}
 	default:
 		if parsed, perr := ParseAgentResult(stdout); parsed != nil {
 			res.ParsedResult = parsed
 		} else if perr != nil {
 			res.Warnings = append(res.Warnings, perr.Error())
+			if res.FailureKind == "" {
+				res.FailureKind = FailureParseWarning
+				res.FailureReason = perr.Error()
+			}
 		}
 	}
+
+	classifyFailure(res, stdout, stderr)
 	return res, nil
+}
+
+// classifyFailure populates FailureKind / FailureReason /
+// PermissionFailure based on the run's exit code, timeout flag, and
+// log content. The classification ladder, strongest first:
+//
+//  1. timeout — the runner reported a context-deadline kill.
+//  2. permission_required — the logs match a known interactive-approval
+//     pattern. This applies even on exit code 0 because some CLIs
+//     print "permission required" and then exit cleanly without
+//     making the requested change.
+//  3. process_failed — non-zero exit, no other classification.
+//
+// A previously-set FailureKind from the parser path (parse_warning)
+// is overwritten by anything stronger above, since a permission
+// failure is the more actionable problem.
+func classifyFailure(res *AgentRunResult, stdout, stderr string) {
+	if res.TimedOut {
+		res.FailureKind = FailureTimeout
+		res.FailureReason = fmt.Sprintf(
+			"agent timed out after %s; AWO defaults to %s when no timeout is configured",
+			res.Command.Timeout, defaultAgentTimeout,
+		)
+		return
+	}
+	if pf := DetectPermissionFailure(stdout, stderr); pf != nil {
+		res.FailureKind = FailurePermissionRequired
+		res.FailureReason = fmt.Sprintf(
+			"agent appears to have hit an interactive permission/approval prompt (%s: %q)",
+			pf.Source, pf.Sample,
+		)
+		res.PermissionFailure = pf
+		return
+	}
+	if res.ExitCode != 0 && res.FailureKind != FailureParseWarning {
+		res.FailureKind = FailureProcessFailed
+		res.FailureReason = fmt.Sprintf("agent exited with code %d", res.ExitCode)
+		return
+	}
+	// Even with exit 0, if the parser flagged a warning we keep that
+	// classification (set above). Otherwise leave FailureKind == "".
 }
 
 func formatCommand(spec execx.CommandSpec) string {
@@ -332,13 +453,9 @@ func formatCommand(spec execx.CommandSpec) string {
 	if spec.Timeout > 0 {
 		fmt.Fprintf(&b, "\n# timeout: %s", spec.Timeout)
 	}
+	if len(spec.Stdin) > 0 {
+		b.WriteString("\n# stdin: prompt piped from prompt.md (non-interactive)")
+	}
 	b.WriteString("\n")
 	return b.String()
-}
-
-func secondsToDuration(s int) time.Duration {
-	if s <= 0 {
-		return 0
-	}
-	return time.Duration(s) * time.Second
 }

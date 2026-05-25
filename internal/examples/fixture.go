@@ -30,11 +30,11 @@ const fixtureMarkerName = ".awo-fixture"
 
 // SampleGoAppResult describes what CreateSampleGoApp did.
 type SampleGoAppResult struct {
-	Path           string
-	Files          []string
-	Replaced       bool
-	GitCommit      string
-	BranchName     string
+	Path       string
+	Files      []string
+	Replaced   bool
+	GitCommit  string
+	BranchName string
 }
 
 // CreateSampleGoApp materializes the sample Go fixture under

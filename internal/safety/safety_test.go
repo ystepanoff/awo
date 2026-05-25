@@ -40,8 +40,8 @@ func TestIsSubpath(t *testing.T) {
 	}{
 		{root, filepath.Join(root, "a"), true},
 		{root, filepath.Join(root, "a", "b", "c"), true},
-		{root, root, false},                                // equal: strict child
-		{root, filepath.Join(root, ".."), false},           // parent
+		{root, root, false},                                 // equal: strict child
+		{root, filepath.Join(root, ".."), false},            // parent
 		{root, filepath.Join(root, "..", "sibling"), false}, // sibling
 		{filepath.Join(root, "a"), filepath.Join(root, "ab"), false},
 		{filepath.Join(root, "a"), filepath.Join(root, "a", "b"), true},

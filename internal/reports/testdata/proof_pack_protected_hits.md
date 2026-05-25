@@ -9,6 +9,10 @@
 - finished: 2026-05-21T12:00:02Z
 - recommendation: **needs_human_attention**
 
+> AWO ran agents in **non-interactive** mode. CLIs were not allowed to
+> prompt for approval; they either had pre-granted permission for the
+> operation or the run failed closed.
+
 ## Task
 
 add /health endpoint
@@ -48,4 +52,4 @@ Patch: `.awo/runs/20260521-120000-abc123/diff.patch`
 AWO did not commit, push, merge, or auto-approve this change.
 AWO never auto-merges, auto-commits, or auto-pushes. Review the worktree before any human commit.
 
-Recommended next step: changed files include protected paths — review carefully before merging.
+Recommended next step: this run needs a human look — see the failure section and protected-path warnings (if any) before proceeding.

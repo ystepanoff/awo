@@ -119,7 +119,7 @@ type singleShellRunner struct {
 	calls int
 }
 
-func (s *singleShellRunner) run(_ context.Context, command, _ , stdoutPath, stderrPath string) (*execx.CommandResult, error) {
+func (s *singleShellRunner) run(_ context.Context, command, _, stdoutPath, stderrPath string) (*execx.CommandResult, error) {
 	s.calls++
 	if stdoutPath != "" {
 		_ = os.WriteFile(stdoutPath, []byte("ok\n"), 0o644)

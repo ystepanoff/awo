@@ -61,59 +61,105 @@ func defaultInput(t *testing.T, kind domain.AgentKind, role domain.AgentRole) Ag
 
 // ----- BuildClaudeCommand -------------------------------------------------
 
-func TestBuildClaudeCommandDefaults(t *testing.T) {
-	got := BuildClaudeCommand(config.ClaudeConfig{}, "the-prompt")
+func TestBuildClaudeCommandWriterDefaults(t *testing.T) {
+	got := BuildClaudeCommand(config.ClaudeConfig{}, domain.RoleWriter, "the-prompt", "/wt", "/wt/out.log", "/wt/err.log")
 	if got.Command != "claude" {
 		t.Errorf("Command=%q want %q", got.Command, "claude")
 	}
 	want := []string{"-p", "--permission-mode", "acceptEdits"}
 	if !equal(got.Args, want) {
-		t.Errorf("Args=%v want %v (non-interactive print + auto-accept inside cwd)", got.Args, want)
+		t.Errorf("Args=%v want %v (writer = non-interactive print + auto-accept inside cwd)", got.Args, want)
 	}
 	if string(got.Stdin) != "the-prompt" {
 		t.Errorf("Stdin=%q want prompt to be piped on stdin", string(got.Stdin))
 	}
-	if got.Timeout != 0 {
-		t.Errorf("Timeout=%v want 0 for unset", got.Timeout)
+	if got.Timeout != defaultAgentTimeout {
+		t.Errorf("Timeout=%v want default %v", got.Timeout, defaultAgentTimeout)
+	}
+}
+
+func TestBuildClaudeCommandReviewerDefaults(t *testing.T) {
+	got := BuildClaudeCommand(config.ClaudeConfig{}, domain.RoleReviewer, "p", "/wt", "/wt/out", "/wt/err")
+	want := []string{"-p", "--permission-mode", "plan"}
+	if !equal(got.Args, want) {
+		t.Errorf("Args=%v want %v (reviewer = plan-only)", got.Args, want)
 	}
 }
 
 func TestBuildClaudeCommandNoDangerousDefaults(t *testing.T) {
-	got := BuildClaudeCommand(config.ClaudeConfig{}, "p")
-	for _, a := range got.Args {
-		if strings.Contains(a, "dangerously") || strings.Contains(a, "skip-permission") || a == "bypassPermissions" {
-			t.Errorf("must not auto-bypass permissions; got arg %q in %v", a, got.Args)
+	for _, role := range []domain.AgentRole{domain.RoleWriter, domain.RoleReviewer, domain.RoleCompetitor} {
+		got := BuildClaudeCommand(config.ClaudeConfig{}, role, "p", "/wt", "/o", "/e")
+		for _, a := range got.Args {
+			low := strings.ToLower(a)
+			if strings.Contains(low, "dangerously") || strings.Contains(low, "skip-permission") || low == "bypasspermissions" {
+				t.Errorf("role=%s must not auto-bypass permissions; got arg %q in %v", role, a, got.Args)
+			}
 		}
 	}
 }
 
-func TestBuildClaudeCommandHonorsConfig(t *testing.T) {
+func TestBuildClaudeCommandHonorsRoleArgs(t *testing.T) {
 	cfg := config.ClaudeConfig{
 		Command:        "/opt/claude-bin",
+		WriterArgs:     []string{"--writer-flag"},
+		ReviewerArgs:   []string{"--reviewer-flag"},
+		TimeoutSeconds: 30,
+	}
+	w := BuildClaudeCommand(cfg, domain.RoleWriter, "p", "/wt", "/o", "/e")
+	if w.Command != "/opt/claude-bin" {
+		t.Errorf("writer Command=%q", w.Command)
+	}
+	if !equal(w.Args, []string{"--writer-flag"}) {
+		t.Errorf("writer Args=%v", w.Args)
+	}
+	if w.Timeout != 30*time.Second {
+		t.Errorf("writer Timeout=%v", w.Timeout)
+	}
+
+	r := BuildClaudeCommand(cfg, domain.RoleReviewer, "p", "/wt", "/o", "/e")
+	if !equal(r.Args, []string{"--reviewer-flag"}) {
+		t.Errorf("reviewer Args=%v", r.Args)
+	}
+}
+
+func TestBuildClaudeCommandHonorsLegacyArgs(t *testing.T) {
+	// Legacy single Args list applies to every role when no per-role
+	// list is set.
+	cfg := config.ClaudeConfig{
 		Args:           []string{"--profile", "ci"},
 		TimeoutSeconds: 30,
 	}
-	got := BuildClaudeCommand(cfg, "p")
-	if got.Command != "/opt/claude-bin" {
-		t.Errorf("Command=%q", got.Command)
+	for _, role := range []domain.AgentRole{domain.RoleWriter, domain.RoleReviewer, domain.RoleCompetitor} {
+		got := BuildClaudeCommand(cfg, role, "p", "/wt", "/o", "/e")
+		if !equal(got.Args, []string{"--profile", "ci"}) {
+			t.Errorf("role=%s Args=%v want legacy fallback", role, got.Args)
+		}
 	}
-	if !equal(got.Args, []string{"--profile", "ci"}) {
-		t.Errorf("Args=%v", got.Args)
+}
+
+func TestBuildClaudeCommandPromptPlaceholder(t *testing.T) {
+	cfg := config.ClaudeConfig{
+		WriterArgs: []string{"-p", "--prompt", "{{prompt}}"},
 	}
-	if got.Timeout != 30*time.Second {
-		t.Errorf("Timeout=%v", got.Timeout)
+	got := BuildClaudeCommand(cfg, domain.RoleWriter, "DO IT", "/wt", "/o", "/e")
+	want := []string{"-p", "--prompt", "DO IT"}
+	if !equal(got.Args, want) {
+		t.Errorf("Args=%v want %v ({{prompt}} should be substituted)", got.Args, want)
+	}
+	if len(got.Stdin) != 0 {
+		t.Errorf("Stdin should be empty when placeholder is used; got %q", string(got.Stdin))
 	}
 }
 
 // ----- BuildCodexCommand --------------------------------------------------
 
-func TestBuildCodexCommandDefaults(t *testing.T) {
-	cfg := config.Default().Agents.Codex // exec + sandbox + approvalMode
-	got := BuildCodexCommand(cfg, "the-prompt")
+func TestBuildCodexCommandWriterDefaults(t *testing.T) {
+	cfg := config.Default().Agents.Codex
+	got := BuildCodexCommand(cfg, domain.RoleWriter, "the-prompt", "/wt", "/o", "/e")
 	if got.Command != "codex" {
 		t.Errorf("Command=%q", got.Command)
 	}
-	want := []string{"exec", "--sandbox", "workspace-write", "--approval-mode", "on-request"}
+	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
 	}
@@ -125,34 +171,76 @@ func TestBuildCodexCommandDefaults(t *testing.T) {
 	}
 }
 
-func TestBuildCodexCommandUsesExecWhenArgsEmpty(t *testing.T) {
-	cfg := config.CodexConfig{} // no Args, no sandbox, no approval
-	got := BuildCodexCommand(cfg, "p")
-	if !equal(got.Args, []string{"exec"}) {
-		t.Errorf("Args=%v want [exec]", got.Args)
+func TestBuildCodexCommandReviewerDefaults(t *testing.T) {
+	cfg := config.Default().Agents.Codex
+	got := BuildCodexCommand(cfg, domain.RoleReviewer, "p", "/wt", "/o", "/e")
+	want := []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+	if !equal(got.Args, want) {
+		t.Errorf("reviewer Args=%v want %v", got.Args, want)
 	}
 }
 
-func TestBuildCodexCommandUserArgsReplaceDefault(t *testing.T) {
-	cfg := config.CodexConfig{
-		Args:         []string{"--profile", "ci", "exec"},
-		Sandbox:      "read-only",
-		ApprovalMode: "never",
+func TestBuildCodexCommandUsesEmptyConfigDefaults(t *testing.T) {
+	cfg := config.CodexConfig{}
+	got := BuildCodexCommand(cfg, domain.RoleWriter, "p", "/wt", "/o", "/e")
+	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
+	if !equal(got.Args, want) {
+		t.Errorf("Args=%v want safe writer default %v", got.Args, want)
 	}
-	got := BuildCodexCommand(cfg, "p")
-	want := []string{"--profile", "ci", "exec", "--sandbox", "read-only", "--approval-mode", "never"}
+}
+
+func TestBuildCodexCommandLegacyArgsFallback(t *testing.T) {
+	// A pre-per-role config uses Args + Sandbox + ApprovalMode and
+	// must keep working unchanged.
+	cfg := config.CodexConfig{
+		Args:         []string{"exec", "--profile", "ci"},
+		Sandbox:      "read-only",
+		ApprovalMode: "on-request",
+	}
+	got := BuildCodexCommand(cfg, domain.RoleWriter, "p", "/wt", "/o", "/e")
+	want := []string{"exec", "--profile", "ci", "--sandbox", "read-only", "--approval-mode", "on-request"}
+	if !equal(got.Args, want) {
+		t.Errorf("legacy fallback Args=%v want %v", got.Args, want)
+	}
+}
+
+func TestBuildCodexCommandPromptPlaceholder(t *testing.T) {
+	cfg := config.CodexConfig{
+		WriterArgs: []string{"exec", "{{prompt}}"},
+	}
+	got := BuildCodexCommand(cfg, domain.RoleWriter, "DO IT", "/wt", "/o", "/e")
+	want := []string{"exec", "DO IT"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
+	}
+	if len(got.Stdin) != 0 {
+		t.Errorf("Stdin should be empty with placeholder; got %q", string(got.Stdin))
 	}
 }
 
 func TestBuildCodexCommandNoDangerousDefaults(t *testing.T) {
-	cfg := config.Default().Agents.Codex
-	got := BuildCodexCommand(cfg, "p")
-	for _, a := range got.Args {
-		if strings.Contains(a, "dangerously") || strings.Contains(a, "skip-permission") {
-			t.Errorf("must not auto-bypass permissions; got arg %q in %v", a, got.Args)
+	for _, role := range []domain.AgentRole{domain.RoleWriter, domain.RoleReviewer, domain.RoleCompetitor} {
+		got := BuildCodexCommand(config.CodexConfig{}, role, "p", "/wt", "/o", "/e")
+		for _, a := range got.Args {
+			low := strings.ToLower(a)
+			if strings.Contains(low, "dangerously") || strings.Contains(low, "skip-permission") || low == "danger-full-access" {
+				t.Errorf("role=%s must not auto-bypass permissions; got arg %q in %v", role, a, got.Args)
+			}
 		}
+	}
+}
+
+// ----- timeout normalization ---------------------------------------------
+
+func TestResolveTimeoutDefaultsTo1800OnZero(t *testing.T) {
+	if got := resolveTimeout(0); got != defaultAgentTimeout {
+		t.Errorf("resolveTimeout(0)=%v want %v", got, defaultAgentTimeout)
+	}
+	if got := resolveTimeout(-5); got != defaultAgentTimeout {
+		t.Errorf("resolveTimeout(-5)=%v want %v", got, defaultAgentTimeout)
+	}
+	if got := resolveTimeout(60); got != 60*time.Second {
+		t.Errorf("resolveTimeout(60)=%v want 60s", got)
 	}
 }
 
@@ -201,6 +289,9 @@ func TestClaudeRunInvokesCLIAndParsesResult(t *testing.T) {
 	if res.ParsedReview != nil {
 		t.Errorf("writer should not produce review block, got %+v", res.ParsedReview)
 	}
+	if res.FailureKind != "" {
+		t.Errorf("FailureKind=%q want empty for clean run", res.FailureKind)
+	}
 }
 
 func TestClaudeRunDryRunDoesNotInvokeCLI(t *testing.T) {
@@ -225,6 +316,13 @@ func TestClaudeRunDryRunDoesNotInvokeCLI(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(in.ArtifactDir, "command.txt")); err != nil {
 		t.Errorf("command.txt should still be written in dry-run: %v", err)
 	}
+	// command.txt records resolved args + timeout + non-interactive marker.
+	cmdRec, _ := os.ReadFile(filepath.Join(in.ArtifactDir, "command.txt"))
+	for _, want := range []string{"-p", "--permission-mode", "acceptEdits", "# timeout:", "# stdin:"} {
+		if !strings.Contains(string(cmdRec), want) {
+			t.Errorf("command.txt missing %q:\n%s", want, string(cmdRec))
+		}
+	}
 	if data, _ := os.ReadFile(filepath.Join(in.ArtifactDir, "stdout.log")); !strings.Contains(string(data), "dry-run") {
 		t.Errorf("stdout.log should mark dry-run, got %q", string(data))
 	}
@@ -248,6 +346,60 @@ func TestClaudeRunRequiresFields(t *testing.T) {
 	}
 }
 
+func TestClaudeRunPermissionFailureClassified(t *testing.T) {
+	in := defaultInput(t, domain.AgentClaude, domain.RoleWriter)
+	fr := &fakeRunner{
+		exitCode:   0, // many CLIs print the error and still exit 0
+		stderrBody: "Error: permission required to edit /etc/passwd\n",
+	}
+	a := &ClaudeCLIAdapter{run: fr.run}
+
+	res, err := a.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.FailureKind != FailurePermissionRequired {
+		t.Errorf("FailureKind=%q want %q", res.FailureKind, FailurePermissionRequired)
+	}
+	if res.PermissionFailure == nil {
+		t.Fatal("PermissionFailure not populated")
+	}
+	if res.PermissionFailure.Source != "stderr" {
+		t.Errorf("source=%q want stderr", res.PermissionFailure.Source)
+	}
+}
+
+func TestClaudeRunTimeoutClassified(t *testing.T) {
+	in := defaultInput(t, domain.AgentClaude, domain.RoleWriter)
+	fr := &fakeRunner{exitCode: -1, timedOut: true}
+	a := &ClaudeCLIAdapter{run: fr.run}
+
+	res, err := a.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.FailureKind != FailureTimeout {
+		t.Errorf("FailureKind=%q want %q", res.FailureKind, FailureTimeout)
+	}
+	if !strings.Contains(res.FailureReason, "timed out") {
+		t.Errorf("FailureReason=%q should mention timeout", res.FailureReason)
+	}
+}
+
+func TestClaudeRunProcessFailedClassified(t *testing.T) {
+	in := defaultInput(t, domain.AgentClaude, domain.RoleWriter)
+	fr := &fakeRunner{exitCode: 1, stderrBody: "ENOENT or whatever\n"}
+	a := &ClaudeCLIAdapter{run: fr.run}
+
+	res, err := a.Run(context.Background(), in)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.FailureKind != FailureProcessFailed {
+		t.Errorf("FailureKind=%q want %q", res.FailureKind, FailureProcessFailed)
+	}
+}
+
 // ----- CodexCLIAdapter.Run ------------------------------------------------
 
 func TestCodexRunInvokesCLIWithSandboxFlags(t *testing.T) {
@@ -262,9 +414,24 @@ func TestCodexRunInvokesCLIWithSandboxFlags(t *testing.T) {
 		t.Fatalf("expected 1 call, got %d", len(fr.calls))
 	}
 	got := fr.calls[0]
-	want := []string{"exec", "--sandbox", "workspace-write", "--approval-mode", "on-request"}
+	want := []string{"exec", "--sandbox", "workspace-write", "--ask-for-approval", "never"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
+	}
+}
+
+func TestCodexRunReviewerUsesReadOnlySandbox(t *testing.T) {
+	in := defaultInput(t, domain.AgentCodex, domain.RoleReviewer)
+	fr := &fakeRunner{exitCode: 0}
+	a := &CodexCLIAdapter{run: fr.run}
+
+	if _, err := a.Run(context.Background(), in); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := fr.calls[0]
+	want := []string{"exec", "--sandbox", "read-only", "--ask-for-approval", "never"}
+	if !equal(got.Args, want) {
+		t.Errorf("reviewer Args=%v want %v (read-only sandbox)", got.Args, want)
 	}
 }
 
@@ -301,6 +468,9 @@ func TestCodexRunMalformedResultProducesWarning(t *testing.T) {
 	}
 	if len(res.Warnings) == 0 {
 		t.Error("expected warning for malformed JSON")
+	}
+	if res.FailureKind != FailureParseWarning {
+		t.Errorf("FailureKind=%q want %q for parse warning", res.FailureKind, FailureParseWarning)
 	}
 }
 

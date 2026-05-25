@@ -26,9 +26,9 @@ var prTmpl string
 // for competitive mode); ProofPackPath is the relative path to
 // proof-pack.md that goes into the description so reviewers can find it.
 type Inputs struct {
-	Report          domain.RunReport
+	Report            domain.RunReport
 	CandidateSelector string
-	ProofPackPath   string
+	ProofPackPath     string
 }
 
 // Render returns the rendered pr-description.md body. It does not
@@ -136,22 +136,22 @@ func summarizeCandidates(rs []domain.AgentRunResult) string {
 // ----- view model ---------------------------------------------------------
 
 type prData struct {
-	RunID            string
-	Mode             string
-	Task             string
-	Recommendation   string
+	RunID             string
+	Mode              string
+	Task              string
+	Recommendation    string
 	HasRecommendation bool
 
-	Candidate         candidateView
-	IsCompetitive     bool
-	CompetingAgents   []string
+	Candidate       candidateView
+	IsCompetitive   bool
+	CompetingAgents []string
 
-	Verifications     []verificationView
-	HasVerifications  bool
+	Verifications    []verificationView
+	HasVerifications bool
 
-	HasReviewer       bool
-	ReviewerAgent     string
-	ReviewFindings    *domain.ReviewFindings
+	HasReviewer    bool
+	ReviewerAgent  string
+	ReviewFindings *domain.ReviewFindings
 
 	HasProtectedHits  bool
 	ProtectedHits     []domain.ProtectedPathHit
@@ -159,14 +159,14 @@ type prData struct {
 	ChangedFileCount  int
 	MaxChangedFiles   int
 
-	ChangedFiles      []string
-	HasChangedFiles   bool
+	ChangedFiles    []string
+	HasChangedFiles bool
 
-	AgentSummary      string
-	AgentRisks        []string
+	AgentSummary string
+	AgentRisks   []string
 
-	ProofPackPath     string
-	HasProofPackPath  bool
+	ProofPackPath    string
+	HasProofPackPath bool
 }
 
 type candidateView struct {

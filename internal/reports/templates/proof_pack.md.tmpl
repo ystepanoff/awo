@@ -15,9 +15,40 @@
 - recommendation: **{{.Recommendation}}**
 {{- end}}
 
+> AWO ran agents in **non-interactive** mode. CLIs were not allowed to
+> prompt for approval; they either had pre-granted permission for the
+> operation or the run failed closed.
+
 ## Task
 
 {{.Task}}
+{{- if .HasAgent}}{{if .PrimaryAgent.FailureKind}}
+
+## ⚠ Agent failure ({{.PrimaryAgent.FailureKind}})
+
+{{.PrimaryAgent.FailureReason}}
+{{if eq .PrimaryAgent.FailureKind "permission_required"}}
+The agent CLI tried to prompt for an interactive approval AWO cannot
+grant. The most common fixes:
+
+- Use the per-role args in `awo.config.json` to pre-grant the
+  permission the writer needs (Claude: `agents.claude.writerArgs`;
+  Codex: `agents.codex.writerArgs`).
+- For Claude, ensure `--permission-mode` is one of `acceptEdits` or
+  `default` with explicit `--allowedTools`. AWO refuses
+  `bypassPermissions` and `--dangerously-skip-permissions`.
+- For Codex, ensure `--ask-for-approval never` and a writable sandbox
+  (`--sandbox workspace-write`). AWO refuses `danger-full-access`.
+- Confirm flag names against your installed `claude --help` /
+  `codex --help`; CLI flags evolve.
+{{else if eq .PrimaryAgent.FailureKind "timeout"}}
+Increase `agents.<agent>.timeoutSeconds` in `awo.config.json` if the
+task is genuinely long, or simplify the task. Default is 1800s.
+{{else if eq .PrimaryAgent.FailureKind "process_failed"}}
+The agent CLI exited with a non-zero status. Inspect
+`{{.PrimaryAgent.StderrPath}}` and `{{.PrimaryAgent.StdoutPath}}` for the
+underlying error.
+{{end}}{{end}}{{end}}
 
 ## Changed files
 {{if .ChangedFiles}}

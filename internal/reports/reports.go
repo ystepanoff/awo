@@ -109,9 +109,9 @@ type ComparisonCandidate struct {
 // FileCount, TestFileCount, ProtectedHitCount are template helpers — Go
 // templates can't subscript len() across nil slices cleanly, so we
 // expose them as methods.
-func (c ComparisonCandidate) FileCount() int          { return len(c.ChangedFiles) }
-func (c ComparisonCandidate) TestFileCount() int      { return len(c.TestFiles) }
-func (c ComparisonCandidate) ProtectedHitCount() int  { return len(c.ProtectedHits) }
+func (c ComparisonCandidate) FileCount() int         { return len(c.ChangedFiles) }
+func (c ComparisonCandidate) TestFileCount() int     { return len(c.TestFiles) }
+func (c ComparisonCandidate) ProtectedHitCount() int { return len(c.ProtectedHits) }
 
 // ComparisonInputs is the data passed to RenderComparison.
 type ComparisonInputs struct {
@@ -195,31 +195,31 @@ func buildComparisonData(in ComparisonInputs) comparisonData {
 // ----- view models --------------------------------------------------------
 
 type proofPackData struct {
-	RunID              string
-	Task               string
-	Mode               string
-	Status             string
-	Recommendation     string
-	StartedAt          string
-	FinishedAt         string
-	HasAgent           bool
-	PrimaryAgent       domain.AgentRunResult
-	ChangedFiles       []string
-	ProtectedHits      []string
+	RunID               string
+	Task                string
+	Mode                string
+	Status              string
+	Recommendation      string
+	StartedAt           string
+	FinishedAt          string
+	HasAgent            bool
+	PrimaryAgent        domain.AgentRunResult
+	ChangedFiles        []string
+	ProtectedHits       []string
 	ProtectedHitDetails []domain.ProtectedPathHit
-	HasProtectedHits   bool
-	ChangedFileCount   int
-	MaxChangedFiles    int
-	ExceedsMaxChanged  bool
-	Verifications      []domain.VerificationResult
-	AgentSummary       string
-	AgentRisks         []string
-	HasReviewer        bool
-	ReviewerAgent      domain.AgentRunResult
-	ReviewFindings     *domain.ReviewFindings
-	DiffPatchPath      string
-	Warnings           []string
-	NextHumanAction    string
+	HasProtectedHits    bool
+	ChangedFileCount    int
+	MaxChangedFiles     int
+	ExceedsMaxChanged   bool
+	Verifications       []domain.VerificationResult
+	AgentSummary        string
+	AgentRisks          []string
+	HasReviewer         bool
+	ReviewerAgent       domain.AgentRunResult
+	ReviewFindings      *domain.ReviewFindings
+	DiffPatchPath       string
+	Warnings            []string
+	NextHumanAction     string
 }
 
 type summaryData struct {
@@ -230,6 +230,8 @@ type summaryData struct {
 	VerificationStatus string
 	ChangedFileCount   int
 	NextHumanAction    string
+	FailureKind        string
+	FailureReason      string
 }
 
 // ----- builders -----------------------------------------------------------
@@ -304,8 +306,12 @@ func buildSummaryData(in Inputs) summaryData {
 		rec = string(domain.RecNoRecommendation)
 	}
 	count := 0
+	failureKind := ""
+	failureReason := ""
 	if len(r.AgentResults) > 0 {
 		count = len(r.AgentResults[0].ChangedFiles)
+		failureKind = r.AgentResults[0].FailureKind
+		failureReason = r.AgentResults[0].FailureReason
 	}
 	return summaryData{
 		RunID:              r.RunID,
@@ -315,6 +321,8 @@ func buildSummaryData(in Inputs) summaryData {
 		VerificationStatus: verificationStatus(r.VerificationResults),
 		ChangedFileCount:   count,
 		NextHumanAction:    nextHumanAction(r.Recommendation),
+		FailureKind:        failureKind,
+		FailureReason:      failureReason,
 	}
 }
 
@@ -417,7 +425,7 @@ func nextHumanAction(rec domain.Recommendation) string {
 	case domain.RecFailedVerification:
 		return "verification failed — inspect the verify/ artifacts, fix the failure, and rerun before considering the change."
 	case domain.RecNeedsHumanAttention:
-		return "changed files include protected paths — review carefully before merging."
+		return "this run needs a human look — see the failure section and protected-path warnings (if any) before proceeding."
 	case domain.RecTooLargeForAutoReview:
 		return "the diff is larger than the configured review threshold — consider splitting it before merging."
 	case domain.RecNeedsRevision:

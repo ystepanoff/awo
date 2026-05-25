@@ -161,6 +161,12 @@ type AgentRunResult struct {
 	ParsedResult *ParsedAgentResult `json:"parsedResult,omitempty"`
 	Review       *ReviewFindings    `json:"review,omitempty"`
 	Warnings     []string           `json:"warnings,omitempty"`
+	// FailureKind classifies why the run was not a clean success when set.
+	// Allowed values: "" (none), "process_failed", "timeout",
+	// "permission_required", "parse_warning". Adapters classify and the
+	// orchestrator copies the verdict in.
+	FailureKind   string `json:"failureKind,omitempty"`
+	FailureReason string `json:"failureReason,omitempty"`
 }
 
 // VerificationResult records the outcome of one deterministic verification
@@ -188,10 +194,10 @@ type ProtectedPathHit struct {
 // the orchestrator's recommendation field carries the actionable
 // verdict.
 type SafetyReport struct {
-	ProtectedHits      []ProtectedPathHit `json:"protectedHits,omitempty"`
-	ChangedFileCount   int                `json:"changedFileCount"`
-	MaxChangedFiles    int                `json:"maxChangedFiles,omitempty"`
-	ExceedsMaxChanged  bool               `json:"exceedsMaxChanged,omitempty"`
+	ProtectedHits     []ProtectedPathHit `json:"protectedHits,omitempty"`
+	ChangedFileCount  int                `json:"changedFileCount"`
+	MaxChangedFiles   int                `json:"maxChangedFiles,omitempty"`
+	ExceedsMaxChanged bool               `json:"exceedsMaxChanged,omitempty"`
 }
 
 // RunReport is the canonical artifact written for every run.

@@ -185,9 +185,9 @@ func withTimeout(parent context.Context, d time.Duration) (context.Context, cont
 // so the redactor (when enabled) sees complete lines, then writes to a log
 // file and (optionally) to a terminal stream.
 type streamWriter struct {
-	dest    io.Writer
-	buf     bytes.Buffer
-	redact  bool
+	dest   io.Writer
+	buf    bytes.Buffer
+	redact bool
 }
 
 func (w *streamWriter) Write(p []byte) (int, error) {

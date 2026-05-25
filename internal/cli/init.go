@@ -47,6 +47,13 @@ AWO never auto-merges, auto-commits, or auto-pushes.
 - Do not modify protected paths unless required by the task.
 - Summarize tests and risks at the end of your work.
 - AWO will run deterministic verification commands separately.
+
+You are running in **non-interactive** mode. AWO cannot answer
+permission prompts; if your CLI would normally pause for approval,
+finish what you can without it and explain what was blocked in the
+final summary instead. AWO never enables ` + "`bypassPermissions`" + ` or
+` + "`danger-full-access`" + ` for you, so do not assume those bypasses are
+in effect.
 `
 )
 

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/awo-dev/awo/internal/config"
+	"github.com/awo-dev/awo/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +33,18 @@ func newConfigCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "# source: %s\n%s\n", source, string(b))
+			out := cmd.OutOrStdout()
+			fmt.Fprintf(out, "# source: %s\n%s\n", source, string(b))
+			fmt.Fprintln(out)
+			fmt.Fprintln(out, "# resolved per-role argv (what AWO will actually invoke)")
+			fmt.Fprintln(out, "# AWO runs every agent non-interactively; these are the args used as-is.")
+			roles := []domain.AgentRole{domain.RoleWriter, domain.RoleReviewer, domain.RoleCompetitor}
+			for _, role := range roles {
+				fmt.Fprintf(out, "  claude %s: %s\n", role, strings.Join(cfg.Agents.Claude.RoleArgs(role), " "))
+			}
+			for _, role := range roles {
+				fmt.Fprintf(out, "  codex  %s: %s\n", role, strings.Join(cfg.Agents.Codex.RoleArgs(role), " "))
+			}
 			return nil
 		},
 	})

@@ -114,8 +114,8 @@ type roleFakeAgent struct {
 	parsedWriter *domain.ParsedAgentResult
 	parsedReview *agents.ParsedReviewResult
 	exitCode     int
-	onReviewer func(in agents.AgentRunInput)
-	gotInputs  []agents.AgentRunInput
+	onReviewer   func(in agents.AgentRunInput)
+	gotInputs    []agents.AgentRunInput
 }
 
 func (f *roleFakeAgent) Kind() domain.AgentKind { return f.kind }

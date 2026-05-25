@@ -248,8 +248,8 @@ schema and recommended overrides are in
 | `worktreeBaseDir`                      | `.awo/worktrees`   | Where worktrees live; deletions are bounded to this path.     |
 | `artifactDir`                          | `.awo/runs`        | Where run artifacts are written.                              |
 | `defaultVerifyCommands`                | `[]`               | Commands run when `--verify` is not passed.                   |
-| `agents.claude.command` / `args`       | `claude`           | Override if your CLI is named differently or needs flags.     |
-| `agents.codex.command` / `args` / `sandbox` / `approvalMode` | `codex` / `workspace-write` / `on-request` | Same; CLI versions vary, so this is config-driven on purpose. |
+| `agents.claude.command` / `writerArgs` / `reviewerArgs` | `claude` / `-p --permission-mode acceptEdits` / `-p --permission-mode plan` | Per-role argv. AWO runs every agent non-interactively; if the CLI hits an approval prompt the run fails closed with `permission_required`. |
+| `agents.codex.command` / `writerArgs` / `reviewerArgs` | `codex` / `exec --sandbox workspace-write --ask-for-approval never` / `exec --sandbox read-only --ask-for-approval never` | Same. AWO refuses dangerous bypasses (`bypassPermissions`, `danger-full-access`, etc.). |
 | `safety.maxChangedFiles`               | `50`               | Patches above this escalate to `too_large_for_auto_review`.   |
 | `safety.protectedPaths`                | (9 globs)          | Hits escalate to `needs_human_attention`.                     |
 | `safety.requireConfirmationForProtectedPaths` | `true`      | Reserved for future interactive prompts.                      |

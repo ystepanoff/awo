@@ -125,9 +125,9 @@ func TestRunVerificationWritesArtifacts(t *testing.T) {
 		Stderr string
 		Err    error
 	}{
-		"go test ./...":     {Exit: 0, Stdout: "PASS\n"},
-		"pnpm test":         {Exit: 0, Stdout: "ok\n"},
-		"pytest -q":         {Exit: 0, Stdout: "5 passed\n"},
+		"go test ./...": {Exit: 0, Stdout: "PASS\n"},
+		"pnpm test":     {Exit: 0, Stdout: "ok\n"},
+		"pytest -q":     {Exit: 0, Stdout: "5 passed\n"},
 	}}
 
 	cmds := []string{"go test ./...", "pnpm test", "pytest -q"}
