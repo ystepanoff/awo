@@ -1,0 +1,161 @@
+# {{.Task}}
+
+## Summary
+
+{{- if .AgentSummary}}
+{{.AgentSummary}}
+{{else}}
+_No agent-reported summary._
+{{- end}}
+
+## AWO run
+
+- run id: `{{.RunID}}`
+- mode: `{{.Mode}}`
+- candidate: `{{.Candidate.Agent}}` (role={{.Candidate.Role}})
+- branch: `{{.Candidate.BranchName}}`
+- worktree: `{{.Candidate.Worktree}}`
+- agent exit: `{{.Candidate.ExitCode}}` ({{.Candidate.Status}})
+{{- if .HasRecommendation}}
+- AWO recommendation: **{{.Recommendation}}**
+{{- end}}
+
+## Task
+
+{{.Task}}
+
+## Verification results
+{{if .HasVerifications}}
+{{- range .Verifications}}
+- `{{.Command}}` — exit `{{.ExitCode}}` ({{if .Passed}}passed{{else}}**failed**{{end}}, {{.Duration}}ms)
+{{- end}}
+{{else}}
+_No deterministic verification commands were run._
+{{- end}}
+
+{{- if .HasReviewer}}
+
+## Reviewer findings (writer-reviewer mode)
+
+- reviewer: `{{.ReviewerAgent}}`
+{{- if .ReviewFindings}}
+{{- if .ReviewFindings.Recommendation}}
+- reviewer recommendation: **{{.ReviewFindings.Recommendation}}**
+{{- end}}
+{{- if .ReviewFindings.Blocking}}
+
+### Blocking
+{{range .ReviewFindings.Blocking}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.NonBlocking}}
+
+### Non-blocking
+{{range .ReviewFindings.NonBlocking}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.SuggestedTests}}
+
+### Suggested tests
+{{range .ReviewFindings.SuggestedTests}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- if .ReviewFindings.RiskSummary}}
+
+### Risk summary
+
+{{.ReviewFindings.RiskSummary}}
+{{- end}}
+{{else}}
+
+_The reviewer did not produce parsed findings._
+{{- end}}
+{{- end}}
+
+{{- if .IsCompetitive}}
+
+## Competitive comparison
+
+This run produced multiple candidates. The candidate selected for this
+PR description is `{{.Candidate.Agent}}` on `{{.Candidate.BranchName}}`.
+{{if .CompetingAgents}}
+All candidates in the run:
+{{range .CompetingAgents}}
+- {{.}}
+{{- end}}
+{{- end}}
+
+See `comparison.md` in the run artifacts for the full deterministic
+comparison.
+{{- end}}
+
+{{- if or .HasProtectedHits .ExceedsMaxChanged}}
+
+## ⚠ Safety warnings
+{{- if .HasProtectedHits}}
+
+### Protected path warnings
+
+These changed files match configured protected-path patterns and **must
+be reviewed by a human before any merge**:
+{{range .ProtectedHits}}
+- `{{.Path}}`{{if .Patterns}} (matched: {{range $i, $p := .Patterns}}{{if $i}}, {{end}}`{{$p}}`{{end}}){{end}}
+{{- end}}
+{{- end}}
+{{- if .ExceedsMaxChanged}}
+
+### Size warning
+
+This run changed **{{.ChangedFileCount}}** file(s), which exceeds the
+configured `safety.maxChangedFiles` limit of **{{.MaxChangedFiles}}**.
+Consider splitting this change before merging.
+{{- end}}
+{{- end}}
+
+{{- if .HasChangedFiles}}
+
+## Changed files
+{{range .ChangedFiles}}
+- `{{.}}`
+{{- end}}
+{{- end}}
+
+{{- if .AgentRisks}}
+
+## Agent-reported risks (advisory)
+{{range .AgentRisks}}
+- {{.}}
+{{- end}}
+{{- end}}
+
+## Human checklist
+
+Before opening or merging this PR, **a human must**:
+
+- [ ] Inspect the worktree diff at `{{.Candidate.Worktree}}`.
+- [ ] Re-run any verification commands locally if you don't trust the AWO run.
+- [ ] Confirm protected-path changes (if any) are intentional.
+- [ ] Confirm the change is small enough to review confidently.
+- [ ] Commit the change yourself (AWO did not commit).
+- [ ] Push the branch yourself (AWO did not push).
+- [ ] Open the PR yourself, e.g. with `gh pr create`, or via your forge UI.
+
+{{- if .HasProofPackPath}}
+
+## Proof pack
+
+Full deterministic artifacts for this run, including stdout/stderr,
+diffs, and verification logs, are at:
+
+`{{.ProofPackPath}}`
+{{- end}}
+
+---
+
+**AWO did not commit, push, merge, or auto-approve this change.**
+AWO never auto-merges, auto-commits, or auto-pushes. The text above was
+generated from the run report; the human is responsible for any
+write-side action against git or your code-review tooling.
