@@ -340,15 +340,59 @@ func buildAgentResult(
 }
 
 // recommendSingle applies the single-mode verdict ladder. Failed
-// verification always wins; otherwise the safety analysis (protected
-// paths, patch size) decides whether to escalate from "ready for human
-// review". The ladder lives in escalateForSafety so single,
-// writer-reviewer, and competitive modes stay consistent.
+// verification always wins; a run with no changes (whether the agent
+// failed or succeeded but produced nothing) cannot be "ready for
+// human review" because there is nothing to review and verification
+// ran against an unchanged worktree. Otherwise the safety analysis
+// (protected paths, patch size) decides whether to escalate from
+// "ready for human review".
 func recommendSingle(r *domain.RunReport) domain.Recommendation {
 	if len(r.VerificationResults) > 0 && !AllPassed(r.VerificationResults) {
 		return domain.RecFailedVerification
 	}
+	if rec, ok := emptyRunVerdict(r); ok {
+		return rec
+	}
 	return escalateForSafety(domain.RecReadyForHumanReview, r.Safety)
+}
+
+// emptyRunVerdict produces a recommendation for a run that produced
+// no candidate diff. There are two flavors:
+//
+//   - The agent itself reported failure / timeout. The verification
+//     verdict (run against an unchanged worktree) is meaningless;
+//     surface this as needs_human_attention so a human looks at the
+//     stderr/log to see what happened.
+//   - The agent succeeded but produced nothing. No human action is
+//     possible — there is no diff to merge — so report no_recommendation
+//     instead of misleadingly claiming "ready for human review".
+//
+// Returns (rec, true) when one of those applies; (_, false) means the
+// run did produce changed files and the normal ladder should run.
+func emptyRunVerdict(r *domain.RunReport) (domain.Recommendation, bool) {
+	if r == nil {
+		return "", false
+	}
+	totalChanged := 0
+	writerFailed := false
+	sawWriter := false
+	for _, ar := range r.AgentResults {
+		totalChanged += len(ar.ChangedFiles)
+		if ar.Role != domain.RoleWriter && ar.Role != domain.RoleCompetitor {
+			continue
+		}
+		sawWriter = true
+		if ar.Status == "failed" || ar.Status == "timed-out" {
+			writerFailed = true
+		}
+	}
+	if totalChanged > 0 || !sawWriter {
+		return "", false
+	}
+	if writerFailed {
+		return domain.RecNeedsHumanAttention, true
+	}
+	return domain.RecNoRecommendation, true
 }
 
 func persistReport(layout *artifacts.Layout, r *domain.RunReport) error {

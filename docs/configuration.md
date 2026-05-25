@@ -77,7 +77,7 @@ do at runtime.
 | ----- | ---- | ------- | ----- |
 | `enabled` | bool | `true` | Disable to make `awo doctor` skip the Claude check and `awo run --agent claude` refuse. |
 | `command` | string | `claude` | Override if your binary lives at a different name. |
-| `args` | `[]string` | `[]` | Extra args passed before AWO's own. **CLI versions vary** — if a future Claude release renames a flag, change this rather than waiting for an AWO update. |
+| `args` | `[]string` | `["-p", "--permission-mode", "acceptEdits"]` (when unset) | Replaces — does not append to — the defaults. `-p` puts the CLI in non-interactive mode so it reads the prompt from stdin. `--permission-mode acceptEdits` auto-accepts file writes inside the cwd; AWO's cwd is always an isolated worktree under `.awo/worktrees/`, so this is the intended trust boundary. It does **not** bypass permissions for bash or for paths outside cwd. **CLI versions vary**: if a future Claude release renames a flag, change this rather than waiting for an AWO update. See the note below if you need to override these defaults. |
 | `timeoutSeconds` | int | `1800` | Hard timeout per invocation. `0` disables. |
 
 ### `agents.codex`
@@ -96,6 +96,28 @@ hard-coded: the Claude and Codex CLIs each have their own release
 cadence, and forcing AWO to match them in lock-step would mean every
 upstream rename ships as an AWO bug. Leaving these fields in your
 config means a CLI bump becomes a one-line edit on your machine.
+
+#### Customizing Claude's permission mode
+
+The default args (`-p --permission-mode acceptEdits`) make the CLI
+work inside an isolated worktree without a human at the keyboard.
+You may want to change them in two situations:
+
+- **Older Claude versions that don't accept `--permission-mode`.**
+  Drop the flag and pass whichever non-interactive mode your version
+  supports — for example `["-p"]` alone, or `["-p", "--allowedTools",
+  "Edit"]`. If runs report `changed files: 0` and the agent log says
+  permission was denied, this is the knob that needs tuning.
+- **Tighter sandboxing.** Replace `acceptEdits` with `default` /
+  `dontAsk` if you want every write to require explicit allowlisting
+  via `--allowedTools`. Note that `bypassPermissions` and
+  `--dangerously-skip-permissions` are out of scope: AWO's worktree
+  isolation is the safety boundary, not the CLI's permission flag,
+  but auto-bypassing bash defeats the spirit of leaving verification
+  as the only operator-controlled shell entry point.
+
+Always confirm flag names against your installed `claude --help`;
+CLI versions evolve and AWO does not pin them.
 
 ### `safety`
 

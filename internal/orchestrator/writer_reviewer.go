@@ -402,6 +402,9 @@ func recommendWriterReviewer(r *domain.RunReport, review *domain.ReviewFindings)
 			return domain.RecNeedsRevision
 		}
 	}
+	if rec, ok := emptyRunVerdict(r); ok {
+		return rec
+	}
 	return escalateForSafety(domain.RecReadyForHumanReview, r.Safety)
 }
 

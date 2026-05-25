@@ -113,19 +113,41 @@ func (a *ClaudeCLIAdapter) kindRoleSlug(r domain.AgentRole) string { return "cla
 
 // BuildClaudeCommand turns ClaudeConfig + prompt into a CommandSpec.
 //
-// The defaults are intentionally minimal: just the binary name, with
-// any user-configured Args appended verbatim. The prompt is delivered
-// on stdin via PromptPath in runAdapter — this adapter does not embed
-// it as a CLI flag because the supported flags differ across versions.
+// Defaults (when cfg.Args is empty):
+//
+//	-p                                non-interactive print mode; reads
+//	                                  the prompt from stdin.
+//	--permission-mode acceptEdits     auto-accept file writes inside the
+//	                                  cwd. AWO's cwd is always an
+//	                                  isolated worktree under
+//	                                  .awo/worktrees, so this is the
+//	                                  intended trust boundary — without
+//	                                  it the CLI prompts for permission
+//	                                  on every Edit and the writer can't
+//	                                  make progress non-interactively.
+//	                                  This is the safest of the
+//	                                  auto-modes; it does NOT bypass
+//	                                  permissions for bash or for paths
+//	                                  outside cwd.
+//
+// User-supplied cfg.Args REPLACE the defaults. The prompt itself is
+// always written to stdin (never as a CLI argument) so prompt content
+// never reaches a shell and isn't limited by argv length.
 func BuildClaudeCommand(cfg config.ClaudeConfig, prompt string) execx.CommandSpec {
 	bin := strings.TrimSpace(cfg.Command)
 	if bin == "" {
 		bin = "claude"
 	}
-	args := append([]string(nil), cfg.Args...)
+	var args []string
+	if len(cfg.Args) > 0 {
+		args = append(args, cfg.Args...)
+	} else {
+		args = append(args, "-p", "--permission-mode", "acceptEdits")
+	}
 	return execx.CommandSpec{
 		Command: bin,
 		Args:    args,
+		Stdin:   []byte(prompt),
 		Timeout: secondsToDuration(cfg.TimeoutSeconds),
 	}
 }
@@ -186,6 +208,7 @@ func BuildCodexCommand(cfg config.CodexConfig, prompt string) execx.CommandSpec 
 	return execx.CommandSpec{
 		Command: bin,
 		Args:    args,
+		Stdin:   []byte(prompt),
 		Timeout: secondsToDuration(cfg.TimeoutSeconds),
 	}
 }

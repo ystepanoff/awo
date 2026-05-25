@@ -43,6 +43,10 @@ type CommandSpec struct {
 	Timeout    time.Duration
 	StdoutPath string
 	StderrPath string
+	// Stdin, when non-empty, is fed to the child's stdin. AWO uses this
+	// to deliver agent prompts non-interactively without invoking a
+	// shell. When empty the child's stdin is left attached to /dev/null.
+	Stdin      []byte
 	LiveOutput bool
 	RedactLogs bool
 }
@@ -91,6 +95,9 @@ func Run(ctx context.Context, spec CommandSpec) (*CommandResult, error) {
 
 	cmd.Stdout = stdoutW
 	cmd.Stderr = stderrW
+	if len(spec.Stdin) > 0 {
+		cmd.Stdin = bytes.NewReader(spec.Stdin)
+	}
 
 	start := time.Now()
 	runErr := cmd.Run()

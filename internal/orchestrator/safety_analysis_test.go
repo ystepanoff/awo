@@ -158,6 +158,44 @@ func TestRunSingleSetsSafetyReportOnReport(t *testing.T) {
 	}
 }
 
+// When the agent itself fails (non-zero exit) and the worktree ends
+// up unchanged, verification ran against unchanged code and its
+// "passed" verdict is meaningless. The orchestrator must not report
+// ready_for_human_review in that situation; humans need to see that
+// the agent broke before any verification result is trusted.
+func TestRunSingleAgentFailedNoChangesEscalates(t *testing.T) {
+	opts, fg, fa, _ := baseSingleOpts(t)
+	fa.exitCode = 1
+	fg.ChangedFiles = nil
+
+	report, err := RunSingle(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("RunSingle: %v", err)
+	}
+	if report.Recommendation != domain.RecNeedsHumanAttention {
+		t.Errorf("recommendation=%q want needs_human_attention when agent failed and produced no diff",
+			report.Recommendation)
+	}
+}
+
+// An agent that exits 0 but produces no diff still has nothing for a
+// human to review. Reporting ready_for_human_review would be
+// misleading — there is no candidate. Use no_recommendation instead.
+func TestRunSingleAgentSucceededNoChangesGivesNoRecommendation(t *testing.T) {
+	opts, fg, fa, _ := baseSingleOpts(t)
+	fa.exitCode = 0
+	fg.ChangedFiles = nil
+
+	report, err := RunSingle(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("RunSingle: %v", err)
+	}
+	if report.Recommendation != domain.RecNoRecommendation {
+		t.Errorf("recommendation=%q want no_recommendation when agent succeeded but produced no diff",
+			report.Recommendation)
+	}
+}
+
 func TestRunSingleTooLargeSetsSafetyReport(t *testing.T) {
 	opts, fg, _, _ := baseSingleOpts(t)
 	opts.MaxChangedFiles = 2

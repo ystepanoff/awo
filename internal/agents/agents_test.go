@@ -62,15 +62,28 @@ func defaultInput(t *testing.T, kind domain.AgentKind, role domain.AgentRole) Ag
 // ----- BuildClaudeCommand -------------------------------------------------
 
 func TestBuildClaudeCommandDefaults(t *testing.T) {
-	got := BuildClaudeCommand(config.ClaudeConfig{}, "p")
+	got := BuildClaudeCommand(config.ClaudeConfig{}, "the-prompt")
 	if got.Command != "claude" {
 		t.Errorf("Command=%q want %q", got.Command, "claude")
 	}
-	if len(got.Args) != 0 {
-		t.Errorf("Args=%v, want none for defaults", got.Args)
+	want := []string{"-p", "--permission-mode", "acceptEdits"}
+	if !equal(got.Args, want) {
+		t.Errorf("Args=%v want %v (non-interactive print + auto-accept inside cwd)", got.Args, want)
+	}
+	if string(got.Stdin) != "the-prompt" {
+		t.Errorf("Stdin=%q want prompt to be piped on stdin", string(got.Stdin))
 	}
 	if got.Timeout != 0 {
 		t.Errorf("Timeout=%v want 0 for unset", got.Timeout)
+	}
+}
+
+func TestBuildClaudeCommandNoDangerousDefaults(t *testing.T) {
+	got := BuildClaudeCommand(config.ClaudeConfig{}, "p")
+	for _, a := range got.Args {
+		if strings.Contains(a, "dangerously") || strings.Contains(a, "skip-permission") || a == "bypassPermissions" {
+			t.Errorf("must not auto-bypass permissions; got arg %q in %v", a, got.Args)
+		}
 	}
 }
 
@@ -96,13 +109,16 @@ func TestBuildClaudeCommandHonorsConfig(t *testing.T) {
 
 func TestBuildCodexCommandDefaults(t *testing.T) {
 	cfg := config.Default().Agents.Codex // exec + sandbox + approvalMode
-	got := BuildCodexCommand(cfg, "p")
+	got := BuildCodexCommand(cfg, "the-prompt")
 	if got.Command != "codex" {
 		t.Errorf("Command=%q", got.Command)
 	}
 	want := []string{"exec", "--sandbox", "workspace-write", "--approval-mode", "on-request"}
 	if !equal(got.Args, want) {
 		t.Errorf("Args=%v want %v", got.Args, want)
+	}
+	if string(got.Stdin) != "the-prompt" {
+		t.Errorf("Stdin=%q want prompt to be piped on stdin", string(got.Stdin))
 	}
 	if got.Timeout != 1800*time.Second {
 		t.Errorf("Timeout=%v", got.Timeout)

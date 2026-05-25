@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agents now actually receive the prompt.** Previously the rendered
+  prompt was written to `prompt.md` in the agent's artifact directory
+  but never piped to the CLI's stdin, so `claude --print` exited
+  immediately with `Input must be provided either through stdin or as
+  a prompt argument`. `execx.CommandSpec` now has a `Stdin` field that
+  both adapters populate; the prompt is delivered on stdin in
+  non-interactive mode.
+- **Claude can actually edit files in its worktree.** The default
+  Claude args are now `["-p", "--permission-mode", "acceptEdits"]`.
+  Without `acceptEdits`, the CLI prompts for permission on every
+  Edit and there is no terminal to answer, so the writer would exit
+  cleanly with an empty diff. `acceptEdits` accepts file writes
+  inside the cwd only; AWO's cwd is always an isolated worktree
+  under `.awo/worktrees/`, so this matches the existing trust
+  boundary. It does not bypass permissions for bash or for paths
+  outside cwd.
+
+### Changed
+
+- **Recommendation when a run produces no diff.** Previously a run
+  whose worktree ended up unchanged was labeled
+  `ready_for_human_review` because verification (run against unchanged
+  code) "passed". The verdict now distinguishes:
+  - agent failed (non-zero exit / timeout) AND no changes →
+    `needs_human_attention` so a human looks at the agent log;
+  - agent succeeded but produced no changes → `no_recommendation`
+    because there is no candidate for a human to review.
+
 ## [0.1.0] - 2026-05-25
 
 Initial public release.
