@@ -108,6 +108,63 @@ cat .awo/runs/$LATEST/proof-pack.md   # includes the reviewer's findings
 ls .awo/runs/$LATEST/agents/          # claude-writer/  codex-reviewer/
 ```
 
+### Worked output against the fixture
+
+A real run of the writer-reviewer command above against the bundled
+fixture:
+
+```sh
+awo run "add tests for calculator edge cases" \
+    --mode writer-reviewer \
+    --primary claude --reviewer codex \
+    --verify "go test ./..." \
+    --keep-worktrees --live-output
+```
+
+CLI tail (trimmed):
+
+```text
+AWO run 20260525-194155-a9db14
+  status:         completed
+  recommendation: needs_revision
+  writer:         awo/20260525-194155-a9db14/claude-writer @ .awo/worktrees/20260525-194155-a9db14/claude-writer
+  reviewer:       awo/20260525-194155-a9db14/codex-reviewer @ .awo/worktrees/20260525-194155-a9db14/codex-reviewer
+  agent:          claude/writer — ok (exit 0)
+  changed files:  1
+  agent:          codex/reviewer — ok (exit 0)
+  review:         1 blocking, 1 non-blocking (rec=needs_revision)
+  verification:   1/1 passed
+  artifacts:      .awo/runs/20260525-194155-a9db14
+  proof pack:     .awo/runs/20260525-194155-a9db14/proof-pack.md
+```
+
+The writer's diff added five table-driven `Test*EdgeCases` blocks to
+`calculator_test.go` plus a `TestDivideByZeroPanics` that asserts the
+current panic. The reviewer (Codex) flagged the divide-by-zero test
+as the wrong contract:
+
+> TestDivideByZeroPanics locks in the current panic behavior for
+> Divide(1,0), but the removed comment states the task is to expose
+> missing divide-by-zero behavior. This should be a failing/spec-driven
+> edge-case test for the intended behavior, not a test that treats the
+> current panic as correct.
+
+That is exactly the safety model working as intended: `go test ./...`
+**passed** in the writer's worktree (the new tests are internally
+consistent), but a different model spotted that the panic-pinning test
+preserves the bug instead of exposing it. The recommendation was
+correctly escalated to `needs_revision` despite verification being
+green. AWO did not auto-merge, did not commit, and left the worktree
+on disk for human inspection.
+
+You may also see a `failureKind: permission_required` entry on the
+writer in `proof-pack.md`. That is the writer CLI's own sandbox
+refusing to shell out to `go test` from inside the agent process — a
+distinct event from AWO's verification step, which runs `go test ./...`
+itself and reports `1/1 passed` regardless. The permission_required
+note is informational; the writer's diff and AWO's verification are
+the trusted signals.
+
 ## 4. Competitive mode
 
 ```sh
