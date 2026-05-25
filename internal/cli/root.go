@@ -22,5 +22,6 @@ func NewRootCmd() *cobra.Command {
 	root.AddCommand(newWorktreesCmd())
 	root.AddCommand(newRunCmd())
 	root.AddCommand(newPRCmd())
+	root.AddCommand(newExamplesCmd())
 	return root
 }
